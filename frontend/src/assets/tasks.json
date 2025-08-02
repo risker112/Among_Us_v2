@@ -1,0 +1,14 @@
+[
+    {
+        "task": "Puzzle",
+        "location": "Cafeteria"
+    },
+    {
+        "task": "Prenesenie vody",
+        "location": "Electrical"
+    },
+    {
+        "task": "Triedenie hrachu",
+        "location": "Electrical"
+    }
+]
