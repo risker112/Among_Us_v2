@@ -23,12 +23,9 @@ export default function Pregame() {
 
   // Handle countdown timer
   useEffect(() => {
-    console.log('Pregame component mounted');
-    console.log('Session:', session);
-    console.log('Role:', role);
-    console.log('Character:', character);
+
     if (!role || !character) return;
-    console.log('Starting countdown for role assignment...');
+
     if (countdown > 0) {
       const timer = setTimeout(() => {
         setCountdown(prev => prev - 1);
@@ -39,17 +36,58 @@ export default function Pregame() {
   }, [countdown, role, character]);
 
 
-  // Handle fade out and navigation
   useEffect(() => {
-    if (role && character && countdown === 0) {
-      const timer1 = setTimeout(() => setFadeOut(true), 5000);
-      const timer2 = setTimeout(() => navigate('/game'), 6000);
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-      };
-    }
-  }, [role, character, countdown, navigate]);
+    let timer1, timer2;
+    let isMounted = true;
+
+    const updateGameState = async () => {
+      if (role && character && countdown === 0) {
+        try {
+          const response = await fetch('/api/gamestate', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ state: 'game' }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Failed to update game state');
+          }
+
+          const data = await response.json();
+          console.log('Game state updated:', data.state);
+
+          if (isMounted) {
+            timer1 = setTimeout(() => {
+              setFadeOut(true);
+              console.log('Fade out started');
+            }, 5000);
+
+            timer2 = setTimeout(() => {
+              console.log('Navigating to game');
+              navigate('/game');
+            }, 6000);
+          }
+        } catch (error) {
+          console.error('Error updating game state:', error);
+          if (isMounted) {
+            setError(error.message);
+          }
+        }
+      }
+    };
+
+    updateGameState();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, [role, character, countdown, navigate, setFadeOut, setError]);
 
   // Error state
   if (error) {

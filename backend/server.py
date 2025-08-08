@@ -232,7 +232,7 @@ async def start_game(request: Request):
     random.shuffle(player_ids)
 
     player_roles = {}
-    game_state = "game"
+    game_state = "pregame"
 
     for i, pid in enumerate(player_ids):
         role = roles[i]
@@ -261,6 +261,31 @@ async def start_game(request: Request):
 
     return {"message": "Game started", "players": len(player_ids), "impostors": num_impostors}
 
+@app.post("/api/gamestate")
+async def update_game_state(request: Request):
+    try:
+        data = await request.json()
+        new_state = data.get("state")
+        
+        if not new_state:
+            raise HTTPException(status_code=400, detail="Missing state parameter")
+            
+        valid_states = ["lobby", "pregame", "game", "vote"]
+        if new_state not in valid_states:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid game state. Must be one of: {', '.join(valid_states)}"
+            )
+
+        # Update game state (consider using a proper state management solution)
+        global game_state
+        game_state = new_state
+        
+        return {"status": "success", "state": game_state}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 # ───────────────────────────────────────────────────────────── tasky
 # Nový endpoint na aktualizáciu úlohy hráča
 @app.post("/api/update-task")
