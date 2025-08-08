@@ -3,67 +3,62 @@ import ActionButtons from './ActionButtons.jsx';
 import GlobalProgress from './GlobalProgress.jsx';
 import { useOutletContext } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { useSession } from '../SessionProvider.jsx';
 
 export default function Impostor() {
-  const { globalProgress } = useOutletContext();
-  const [tasks, setTasks] = useState([]);
+  const { session } = useSession();
+  const { globalProgress, tasks: backendTasks } = useOutletContext();
   const [myTasks, setMyTasks] = useState([]);
   const [progress, setProgress] = useState(0);
 
+  // Load my tasks from backendTasks
   useEffect(() => {
-    const allTasks = Array.from({ length: 15 }, (_, i) => ({
-      id: i + 1,
-      title: `Task #${i + 1}`,
-      doneBy: [],
-    }));
-    setTasks(allTasks);
+    if (!backendTasks || backendTasks.length === 0) return;
 
-    setMyTasks(
-      allTasks.map(task => ({
-        id: task.id,
-        done: false,
-      }))
-    );
-  }, []);
+    // Assume backend sends: [{id, title, done}, ...]
+    setMyTasks(backendTasks.map(task => ({
+      id: task.id,
+      title: task.title,
+      done: task.done || false,
+    })));
+  }, [backendTasks]);
 
+  // Calculate progress
   useEffect(() => {
-    if (!tasks.length || !myTasks.length) {
+    if (!myTasks.length) {
       setProgress(0);
       return;
     }
     const doneCount = myTasks.filter(t => t.done).length;
-    setProgress(Math.round((doneCount / tasks.length) * 100));
-    }, [myTasks, tasks]);
+    setProgress(Math.round((doneCount / myTasks.length) * 100));
+  }, [myTasks]);
 
-   const toggleTask = async (id) => {
-    // Optimisticky update lokálneho stavu
+  const toggleTask = async (id) => {
+    // Optimistic update
     setMyTasks(prev =>
       prev.map(t => (t.id === id ? { ...t, done: !t.done } : t))
     );
 
-    try {
-      // Poslať na server aktuálny stav tasku (id a done)
-      const taskState = myTasks.find(t => t.id === id);
-      const newDoneState = taskState ? !taskState.done : true;
+    // try {
+    //   const taskState = myTasks.find(t => t.id === id);
+    //   const newDoneState = taskState ? !taskState.done : true;
 
-      const res = await fetch('/api/update-task', {
-        method: 'POST', // alebo PUT podľa API
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ taskId: id, done: newDoneState }),
-      });
-      if (!res.ok) throw new Error('Failed to update task');
+    //   const res = await fetch('/api/update-task', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({
+    //       taskId: id,
+    //       done: newDoneState,
+    //       playerId: session.player_id,
+    //     }),
+    //   });
 
-      // Pošle server nové globálne percento progressu (príklad)
-      const data = await res.json();
-      if (typeof data.globalProgress === 'number') {
-        // setGlobalProgress(data.globalProgress);
-      }
-    } catch (err) {
-      console.error(err);
-      // Ak chyba, môžeš rollbacknúť lokálny stav, alebo zobraziť chybu
-    }
+    //   if (!res.ok) throw new Error('Failed to update task');
+    //   await res.json(); // you can handle server's response if needed
+    // } catch (err) {
+    //   console.error(err);
+    //   // rollback could be implemented here if necessary
+    // }
   };
 
   return (
@@ -82,26 +77,22 @@ export default function Impostor() {
 
       <section className="mb-8 flex-1 flex flex-col">
         <ul className="overflow-y-auto max-h-[500px] md:max-h-[600px] space-y-2 px-2">
-          {myTasks.map(({ id, done }) => {
-            const task = tasks.find(t => t.id === id);
-            if (!task) return null;
-            return (
-              <li
-                key={id}
-                className="flex items-center bg-gray-900 rounded p-8 shadow hover:bg-gray-800 transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  checked={done}
-                  onChange={() => toggleTask(id)}
-                  className="mr-4 w-12 h-12 cursor-pointer accent-green-500"
-                />
-                <span className={`text-lg ${done ? 'line-through text-gray-400' : 'select-none'}`}>
-                  {task.title}
-                </span>
-              </li>
-            );
-          })}
+          {myTasks.map(({ id, done, title }) => (
+            <li
+              key={id}
+              className="flex items-center bg-gray-900 rounded p-8 shadow hover:bg-gray-800 transition-colors"
+            >
+              <input
+                type="checkbox"
+                checked={done}
+                onChange={() => toggleTask(id)}
+                className="mr-4 w-12 h-12 cursor-pointer accent-green-500"
+              />
+              <span className={`text-lg ${done ? 'line-through text-gray-400' : 'select-none'}`}>
+                {title}
+              </span>
+            </li>
+          ))}
         </ul>
       </section>
       <ActionButtons />

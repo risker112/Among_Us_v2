@@ -12,6 +12,7 @@ function Game() {
   const [character, setCharacter] = useState(session?.character || 'crewmate');
   const location = useLocation();
   const navigate = useNavigate();
+  const [tasks, setTasks] = useState([]);
   const { addMessageListener } = useSocket();
 
   useEffect(() => {
@@ -21,19 +22,33 @@ function Game() {
     }
   }, [session]);
 
-  // useEffect(() => {
-  //   async function fetchGlobalProgress() {
-  //     try {
-  //       const res = await fetch('/api/global-progress');
-  //       if (!res.ok) throw new Error('Failed to fetch global progress');
-  //       const data = await res.json();
-  //       setGlobalProgress(data.progress);
-  //     } catch (err) {
-  //       console.error(err);
-  //     }
-  //   }
-  //   fetchGlobalProgress();
-  // }, []);
+  useEffect(() => {
+    async function fetchTasks() {
+      try {
+        const res = await fetch('/api/tasks');
+        if (!res.ok) throw new Error('Failed to fetch tasks');
+        const data = await res.json();
+        setTasks(data.tasks);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchTasks();
+  }, []);
+
+  useEffect(() => {
+    async function fetchProgress() {
+      try {
+        const res = await fetch('/api/global-progress');
+        if (!res.ok) throw new Error('Failed to fetch progress');
+        const data = await res.json();
+        setGlobalProgress(data.globalProgress);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchProgress();
+  }, [navigate]);
 
   // Emergency redirect
   useEffect(() => {
@@ -55,7 +70,7 @@ function Game() {
 
   return (
     <div>
-      <Outlet context={{ role, character, globalProgress, vote, emergency }} />
+      <Outlet context={{ role, character, globalProgress, vote, emergency, tasks }} />
     </div>
   );
 }

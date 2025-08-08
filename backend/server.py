@@ -25,13 +25,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+with open("../frontend/src/assets/tasks.json", "r") as f:
+    ALL_TASKS = json.load(f)
+    f.close()
+
 # Game state
 connected_players: Dict[str, Dict] = {}
 player_roles = None
 players_tasks = {}
+sabotage_timers = {}
 game_state = "welcome"
 MAX_PLAYERS = 13
-TOTAL_TASKS = 5  # Total tasks for the game
+TOTAL_TASKS = 3
 
 class ConnectionManager:
     def __init__(self):
@@ -207,6 +212,46 @@ def calc_num_impostors(num_players):
         # případně rozšířit logiku pro víc hráčů
         return max(2, num_players // 7)  # třeba 1 Impostor na každých 7 hráčů
 
+def assign_player_tasks(player_id: str):
+    """Assign unique tasks to each player based on their role."""
+    global ALL_TASKS, players_tasks, assigned_task_ids
+    
+    # Initialize if not exists
+    if 'assigned_task_ids' not in globals():
+        assigned_task_ids = set()
+    
+    role = player_roles.get(player_id)['role']
+    players_tasks[player_id] = {}  # Reset tasks for this player
+    print(f"Assigning tasks for {player_id} (Role: {role})")
+    if role == "Impostor":
+        print(role)
+
+        # Assign fake tasks (sabotage)
+        available_fake_tasks = [t for t in ALL_TASKS 
+                              if t["type"] == "sabotage" 
+                              and t["id"] not in assigned_task_ids]
+        
+        for _ in range(min(TOTAL_TASKS, len(available_fake_tasks))):
+            task = random.choice(available_fake_tasks)
+            players_tasks[player_id][str(task["id"])] = False
+            assigned_task_ids.add(task["id"])
+            available_fake_tasks.remove(task)  # Prevent re-selection
+            
+    else:
+        print(role)
+        # Assign real tasks (normal)
+        available_real_tasks = [t for t in ALL_TASKS 
+                              if t["type"] == "normal" 
+                              and t["id"] not in assigned_task_ids]
+        
+        for _ in range(min(TOTAL_TASKS, len(available_real_tasks))):
+            task = random.choice(available_real_tasks)
+            players_tasks[player_id][str(task["id"])] = False
+            assigned_task_ids.add(task["id"])
+            available_real_tasks.remove(task)  # Prevent re-selection
+    
+    print(f"Assigned tasks to {player_id} (Role: {role}): {players_tasks[player_id]}")
+
 @app.post("/api/start")
 async def start_game(request: Request):
     global player_roles, game_state, connected_players
@@ -240,6 +285,7 @@ async def start_game(request: Request):
         role = roles[i]
         character = characters[i]
         player_roles[pid] = {"role": role, "character": character}
+        assign_player_tasks(pid)
 
         player = connected_players[pid]
         player["session"]["role"] = role
@@ -290,6 +336,27 @@ async def update_game_state(request: Request):
     
 # ───────────────────────────────────────────────────────────── tasky
 # Nový endpoint na aktualizáciu úlohy hráča
+@app.get("/api/tasks")
+async def get_tasks(request: Request):
+    player_id = request.session.get("player_id")
+    if not player_id:
+        raise HTTPException(status_code=403, detail="Not authenticated")
+
+    # Example players_tasks[player_id]: {"3": False, "5": True}
+    assigned_tasks = players_tasks.get(player_id, {})
+
+    # Join with full task data
+    full_tasks = []
+    for task_id, done in assigned_tasks.items():
+        task_data = next((t for t in ALL_TASKS if str(t["id"]) == str(task_id)), None)
+        if task_data:
+            full_tasks.append({
+                **task_data,
+                "done": done
+            })
+
+    return {"tasks": full_tasks}
+
 @app.post("/api/update-task")
 async def update_task(request: Request):
     global players_tasks, connected_players, TOTAL_TASKS
@@ -337,8 +404,21 @@ async def get_global_progress(global_progress=0):
         except:
             player["ws"] = None
 
-# global state or per-player storage
-sabotage_timers = {}
+@app.get("/api/global-progress")
+async def get_global_progress_endpoint(request: Request):
+    player_id = request.session.get("player_id")
+    if not player_id:
+        raise HTTPException(status_code=403, detail="Not authenticated")
+
+    total_done = 0
+    total_possible = 0
+    for tasks in players_tasks.values():
+        total_done += sum(1 for v in tasks.values() if v)
+        total_possible += TOTAL_TASKS
+
+    global_progress = 0 if total_possible == 0 else round((total_done / total_possible) * 100)
+
+    return {"globalProgress": global_progress}
 
 @app.post("/api/sabotage")
 async def start_sabotage(request: Request):
@@ -357,12 +437,6 @@ async def get_sabotage_timer(request: Request):
 
     started = sabotage_timers.get(player_id)
     return {"startedAt": started}
-
-
-
-
-
-
 
 # ───────────────────────────────────────────────────────────── session management
 @app.post("/api/session/leave")
@@ -406,32 +480,6 @@ async def update_session(request: Request):
         "status": "success",
         **data
     }
-
-# @app.get("/api/session")
-# async def get_session(request: Request):
-#     global game_state, connected_players
-#     player_id = request.session.get("player_id")
-#     name = request.session.get("name")
-
-#     if not player_id or not name:
-#         raise HTTPException(status_code=403, detail="Not joined")
-
-#     role = None
-#     character = None
-
-#     # vezmeme z backendovej session kópie
-#     if player_id in connected_players:
-#         session_data = connected_players[player_id].get("session", {})
-#         role = session_data.get("role")
-#         character = session_data.get("character")
-
-#     return {
-#         "game_state": game_state,
-#         "player_id": player_id,
-#         "name": name,
-#         "role": role,
-#         "character": character
-#     }
 
 @app.post("/api/leave-lobby")
 async def leave_lobby(request: Request):
@@ -482,21 +530,6 @@ async def end_game(request: Request):
     
     await broadcast_player_list()
     return {"message": "Game ended, returning to lobby"}
-
-
-# Add this endpoint to get full game state
-# @app.get("/api/game/state")
-# async def get_full_game_state(request: Request):
-#     player_id = request.session.get("player_id")
-#     if not player_id:
-#         raise HTTPException(status_code=403, detail="Not authenticated")
-    
-#     return {
-#         "game_state": game_state,
-#         "player_id": player_id,
-#         "role": request.session.get("role"),
-#         "character": request.session.get("character")
-#     }
 
 #───────────────────────────────────────────────────────────── emergency meetings
 @app.post("/api/emergency/call")
