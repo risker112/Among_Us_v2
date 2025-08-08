@@ -4,15 +4,16 @@ import { useSession } from '../SessionProvider.jsx';
 import { useSocket } from '../SocketProvider.jsx';
 
 export default function Lobby() {
-  const { session, refreshSession, updateSession } = useSession(); // Added updateSession
-  const { socket, ready, addMessageListener } = useSocket();
+  const { session } = useSession();
+  const { ready, sendMessage, addMessageListener } = useSocket();
   const [players, setPlayers] = useState([]);
   const [playerId, setPlayerId] = useState(null);
   const [starterId, setStarterId] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
+  
   useEffect(() => {
     if (!session) return;
 
@@ -27,31 +28,39 @@ export default function Lobby() {
   }, [session, navigate]);
 
   useEffect(() => {
-    if (!ready || !socket) return;
-
-    // Send join message when socket is ready
-    socket.send(JSON.stringify({
-      type: 'join',
-      id: session?.player_id,
-      name: session?.name
-    }));
-
-    // Setup message listener
-    const removeListener = addMessageListener(async (msg) => {
-      if (msg.type === 'players_update') {
-        setPlayers(msg.players);
-        setStarterId(msg.starter_id);
+    const handleMessage = (msg) => {
+      console.log('Component received:', msg);
+      switch (msg.type) {
+        case 'players_update':
+          setPlayers(msg.players);
+          setStarterId(msg.starter_id);
+          break;
+        case 'role_assigned':
+          navigate('/pregame');
+          break;
       }
+    };
 
-      if (msg.type === 'role_assigned') {
-        navigate('/pregame');
-      }
-    });
+    const cleanup = addMessageListener(handleMessage);
+    return cleanup; // always cleanup on unmount
+  }, [addMessageListener, navigate]);
 
-    // return () => {
-    //   removeListener();
-    // };
-  }, [ready, socket, session, addMessageListener, navigate, updateSession]);
+  useEffect(() => {
+    if (ready && session?.player_id) {
+      console.log('Sending join message');
+      sendMessage({
+        type: 'join',
+        id: session.player_id,
+        name: session.name
+      });
+    }
+  }, [ready, session, sendMessage]);
+
+
+  // Debug effect
+  useEffect(() => {
+    console.log('Players state changed:', players);
+  }, [players]);
 
   const handleStartGame = async () => {
     try {
@@ -142,12 +151,6 @@ export default function Lobby() {
           </button>
         )}
       </div>
-
-      {players.length < 4 && (
-        <p className="mt-4 text-yellow-400">
-          Recommended: At least 4 players for better gameplay
-        </p>
-      )}
     </div>
   );
 }

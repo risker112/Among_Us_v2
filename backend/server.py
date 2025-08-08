@@ -9,6 +9,7 @@ import random
 import time
 from typing import Dict
 import json
+import uvicorn
 
 app = FastAPI()
 
@@ -94,65 +95,66 @@ async def broadcast_player_list():
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     global connected_players
-    await websocket.accept()
     player_id = None
     
+    await websocket.accept()
+    
     try:
-        # Step 1: Receive authentication
-        data = await websocket.receive_json()
-        print(f"WebSocket connection established with data: {data}")
-        if data.get("type") != "auth":
+        # Initial authentication
+        auth_data = await websocket.receive_json()
+        if auth_data.get("type") != "auth":
             await websocket.close(code=1008, reason="Auth required")
             return
 
-        player_id = data.get("player_id")
-
+        player_id = auth_data.get("player_id")
         if not player_id or player_id not in connected_players:
             await websocket.close(code=1008, reason="Invalid player ID")
             return
 
-        # Update player's WebSocket connection
+        # Store WebSocket connection
         connected_players[player_id]["ws"] = websocket
-
-        # Send immediate player list update
-        await send_player_list(websocket)
         
-        # Broadcast to all other players
+        # Send initial data
+        await send_player_list(websocket)
         await broadcast_player_list(exclude=player_id)
 
-        # Step 2: Normal message handling
+        # Main message loop
         while True:
-            data = await websocket.receive_text()
-            message = json.loads(data)
-
-            if message.get("type") == "join":
-                player_id = message["id"]
-                name = message["name"]
-                print(connected_players)
-                if player_id in connected_players:
-                    connected_players[player_id]["ws"] = websocket
-                    print(f"{name} joined via socket")
-                    
-                    # ✅ Send updated player list directly to the new player
-                    await websocket.send_json({
-                        "type": "players_update",
-                        "players": [
-                            {"id": p["id"], "name": p["name"]}
-                            for p in connected_players.values()
-                        ],
-                        "starter_id": list(connected_players)[0]  # first player as starter
-                    })
-
-                    # 🔁 Then broadcast to others if needed
-                    await broadcast_player_list()
+            try:
+                data = await websocket.receive_json()
+                
+                if data.get("type") == "join":
+                    # Handle join message (if still needed)
+                    if player_id in connected_players:
+                        connected_players[player_id]["ws"] = websocket
+                        print(f"{connected_players[player_id]['name']} reconnected")
+                        
+                        await websocket.send_json({
+                            "type": "players_update",
+                            "players": [
+                                {"id": p["id"], "name": p["name"]}
+                                for p in connected_players.values()
+                            ],
+                            "starter_id": list(connected_players)[0]
+                        })
+                        await broadcast_player_list()
+                
+                # Add other message type handlers here
+                
+            except json.JSONDecodeError:
+                await websocket.send_json({"error": "Invalid JSON format"})
+            except KeyError as e:
+                await websocket.send_json({"error": f"Missing field: {str(e)}"})
 
     except WebSocketDisconnect:
         print(f"Player {player_id} disconnected")
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        print(f"WebSocket error for player {player_id}: {str(e)}")
     finally:
         if player_id and player_id in connected_players:
-            connected_players[player_id]["ws"] = None
+            # Only clear if no new connection was established
+            if connected_players[player_id]["ws"] == websocket:
+                connected_players[player_id]["ws"] = None
             await broadcast_player_list()
 
 async def send_player_list(websocket):
@@ -527,12 +529,13 @@ async def start_voting_after(seconds):
             except Exception as e:
                 print(f"Error sending redirect to {pid}: {e}")
 
-
-
-
-
-
-
-
-
-
+if __name__ == "__main__":
+    uvicorn.run(
+        "server:app", 
+        host="0.0.0.0", 
+        port=8000,
+        ws_ping_interval=20,
+        ws_ping_timeout=20,
+        reload=True,
+        log_level="info"
+    )
