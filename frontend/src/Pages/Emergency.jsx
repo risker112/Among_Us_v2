@@ -7,14 +7,12 @@ export default function Emergency() {
   const { session } = useSession();
   const navigate = useNavigate();
   const [flashing, setFlashing] = useState(session?.game_state === "emergency" || false);
-  const [callerName, setCallerName] = useState('');
   const [countdown, setCountdown] = useState(10);
   const { addMessageListener, error } = useSocket();
   
   useEffect(() => {
     if (session?.game_state) {
       setFlashing(session.game_state === "emergency");
-      setCallerName(session.caller_name || '');
       setCountdown(session.countdown || 10);
     }
   }, [session]);
@@ -26,7 +24,6 @@ export default function Emergency() {
       switch (msg.type) {
         case 'emergency_flash':
           setFlashing(true);
-          setCallerName(msg.caller_name || 'Unknown');
           setCountdown(10);
           break;
           
@@ -42,7 +39,6 @@ export default function Emergency() {
           
         case 'emergency_cancelled':
           setFlashing(false);
-          setCallerName('');
           setCountdown(10);
           break;
           
@@ -102,11 +98,6 @@ export default function Emergency() {
           <h1 className="text-6xl sm:text-4xl md:text-5xl mb-4 text-center drop-shadow-lg animate-pulse">
             EMERGENCY MEETING!
           </h1>
-          {callerName && (
-            <p className="text-3xl sm:text-2xl md:text-3xl mb-10">
-              Called by: <span className="underline text-white">{callerName}</span>
-            </p>
-          )}
           <div className="text-center">
             <p className="text-2xl sm:text-xl md:text-2xl mb-2">
               Starting vote in:

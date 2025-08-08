@@ -38,11 +38,16 @@ function Game() {
   // Emergency redirect
   useEffect(() => {
     const removeListener = addMessageListener((msg) => {
+      console.log('Game component received:', msg);
       if (msg.type === 'emergency_flash') {
         if (location.pathname !== '/game/emergency') {
           navigate('/game/emergency');
         }
+      } else if (msg.type === 'global_progress') {
+        console.log('Global progress update:', msg.progress);
+        setGlobalProgress(msg.progress);
       }
+
     });
 
     return () => removeListener();

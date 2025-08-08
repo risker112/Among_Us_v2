@@ -28,8 +28,10 @@ app.add_middleware(
 # Game state
 connected_players: Dict[str, Dict] = {}
 player_roles = None
+players_tasks = {}
 game_state = "welcome"
 MAX_PLAYERS = 13
+TOTAL_TASKS = 5  # Total tasks for the game
 
 class ConnectionManager:
     def __init__(self):
@@ -290,6 +292,7 @@ async def update_game_state(request: Request):
 # Nový endpoint na aktualizáciu úlohy hráča
 @app.post("/api/update-task")
 async def update_task(request: Request):
+    global players_tasks, connected_players, TOTAL_TASKS
     data = await request.json()
     player_id = data.get("playerId")
     task_id = data.get("taskId")
@@ -316,19 +319,23 @@ async def update_task(request: Request):
 
     global_progress = 0 if total_possible == 0 else round((total_done / total_possible) * 100)
 
+    await get_global_progress(global_progress)
+
     return {"globalProgress": global_progress}
 
 # Endpoint na získanie globálneho progresu
-@app.get("/api/global-progress")
-async def get_global_progress():
-    total_done = 0
-    total_possible = 0
-    for pid, tasks in players_tasks.items():
-        total_done += sum(1 for v in tasks.values() if v)
-        total_possible += TOTAL_TASKS
-
-    global_progress = 0 if total_possible == 0 else round((total_done / total_possible) * 100)
-    return {"progress": global_progress}
+async def get_global_progress(global_progress=0):
+    players = [{"id": p["id"], "name": p["name"]} for p in connected_players.values()]
+    message = {
+        "type": "global_progress",
+        "progress": global_progress,
+    }
+    
+    for pid, player in connected_players.items():
+        try:
+            await player["ws"].send_json(message)
+        except:
+            player["ws"] = None
 
 # global state or per-player storage
 sabotage_timers = {}

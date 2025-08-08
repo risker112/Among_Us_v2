@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import GlobalProgress from './GlobalProgress.jsx';
 import ActionButtons from './ActionButtons';
 import { useOutletContext } from 'react-router-dom';
+import { useSession } from '../SessionProvider.jsx';
 
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
+  const { session } = useSession();
   const [myTasks, setMyTasks] = useState([]);
   const [progress, setProgress] = useState(0);
   const { globalProgress } = useOutletContext();
@@ -53,15 +55,12 @@ export default function Tasks() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ taskId: id, done: newDoneState }),
+        body: JSON.stringify({ taskId: id, done: newDoneState, playerId: session.player_id }),
       });
       if (!res.ok) throw new Error('Failed to update task');
 
       // Pošle server nové globálne percento progressu (príklad)
       const data = await res.json();
-      if (typeof data.globalProgress === 'number') {
-        setGlobalProgress(data.globalProgress);
-      }
     } catch (err) {
       console.error(err);
       // Ak chyba, môžeš rollbacknúť lokálny stav, alebo zobraziť chybu

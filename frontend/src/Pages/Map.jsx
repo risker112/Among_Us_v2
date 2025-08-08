@@ -20,11 +20,6 @@ export default function Map() {
       >
         ⬅ Back
       </button>
-
-      {/* Role display */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 text-white text-xs px-3 py-1 rounded z-10">
-        You are a {role}
-      </div>
     </div>
   );
 }
