@@ -126,7 +126,7 @@ export default function ActionButtons({ onReportKill }) {
           ) : (
             // Sabotage Button for Impostors
             <button
-              className="fixed bottom-52 right-4 bg-yellow-500 rounded-full w-20 h-20 flex items-center justify-center shadow-xl hover:bg-purple-700 focus:outline-none focus:ring-4 focus:ring-purple-300 transition-all duration-200 hover:scale-105 active:scale-95"
+              className="fixed bottom-52 right-4 bg-yellow-500 rounded-full w-20 h-20 flex items-center justify-center shadow-xl hover:bg-yellow-600 focus:outline-none focus:ring-4 focus:ring-purple-300 transition-all duration-200 hover:scale-105 active:scale-95"
               title="Sabotage"
               onClick={onSabotage}
             >

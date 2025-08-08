@@ -380,11 +380,21 @@ async def update_task(request: Request):
     # Spočítaj globálny progress (v %)
     total_done = 0
     total_possible = 0
-    for pid, tasks in players_tasks.items():
-        total_done += sum(1 for v in tasks.values() if v)
+    
+    for player_id, tasks in players_tasks.items():
+        # Skip impostors - they don't contribute to task progress
+        if player_roles.get(player_id)["role"] == "Impostor":
+            continue
+            
+        # Count completed tasks for crewmates only
+        completed = sum(1 for is_done in tasks.values() if is_done)
+        total_done += completed
         total_possible += TOTAL_TASKS
-
-    global_progress = 0 if total_possible == 0 else round((total_done / total_possible) * 100)
+    
+    if total_possible == 0:
+        global_progress = 0
+    else:
+        global_progress = round((total_done / total_possible) * 100)
 
     await get_global_progress(global_progress)
 
@@ -412,9 +422,17 @@ async def get_global_progress_endpoint(request: Request):
 
     total_done = 0
     total_possible = 0
-    for tasks in players_tasks.values():
-        total_done += sum(1 for v in tasks.values() if v)
+    
+    for player_id, tasks in players_tasks.items():
+        # Skip impostors - they don't contribute to task progress
+        if player_roles.get(player_id)["role"] == "Impostor":
+            continue
+            
+        # Count completed tasks for crewmates only
+        completed = sum(1 for is_done in tasks.values() if is_done)
+        total_done += completed
         total_possible += TOTAL_TASKS
+    
 
     global_progress = 0 if total_possible == 0 else round((total_done / total_possible) * 100)
 

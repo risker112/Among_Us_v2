@@ -19,25 +19,25 @@
     },
     {
         "id": 4,
-        "title": "Oprava káblov",
+        "title": "Oprava kablov",
         "location": "Electrical",
         "type": "normal"
     },
     {
         "id": 5,
-        "title": "Oprava káblov",
+        "title": "Oprava kablov",
         "location": "Security",
         "type": "normal"
     },
     {
         "id": 6,
-        "title": "Oprava káblov",
+        "title": "Oprava kablov",
         "location": "Reactor",
         "type": "normal"
     },
     {
         "id": 7,
-        "title": "kazenie káblov",
+        "title": "kazenie kablov",
         "location": "Medbay",
         "type": "sabotage"
     },
