@@ -15,10 +15,6 @@ export default function ActionButtons({ onReportKill, timeLeft, onSabotage, cool
     navigate('/game/map');
   };
 
-
-
-
-
   return (
     <>
       {/* Emergency Button - Top Right */}

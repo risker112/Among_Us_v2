@@ -1,9 +1,3 @@
-emergency je callnute ale ten broadcast nefunguje ...
-general progress dorobit
-kill report s tym ze budem tam zoznam a bude vyberat ze koho nasiel (postavicka a meno aj)
-session sa random maze ...
-
-
-
-
-!!!!!! zmenit url api na ip bo mobil sa nevie dostat k tomu ... nejde ws nejako nejako  a tiez sa popsul player list 
+ked sa dorobia tasky7 abo umru tak endgame
+dorobit vote a ten screen potom 
+tiez ze kto vyhral na konci

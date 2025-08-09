@@ -3,11 +3,14 @@ import GlobalProgress from './GlobalProgress.jsx';
 import ActionButtons from './ActionButtons';
 import { useOutletContext } from 'react-router-dom';
 import { useSession } from '../SessionProvider.jsx';
+import ReportModal from './ReportModal.jsx';
 
 export default function Tasks() {
   const { session } = useSession();
   const { globalProgress, tasks: backendTasks } = useOutletContext();
   const [myTasks, setMyTasks] = useState([]);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [players, setPlayers] = useState([]); // Fetch this from your backend
   const [progress, setProgress] = useState(0);
   const [sabotageActive, setSabotageActive] = useState(false);
   const [sabotageRemaining, setSabotageRemaining] = useState(0);
@@ -81,11 +84,44 @@ export default function Tasks() {
   };
 
   const handleReportKill = () => {
-    console.log('Report Kill button clicked');
+    fetch('api/players', {
+      method: 'GET',
+      credentials: 'include',
+    })
+      .then(res => res.json())
+      .then(data => {
+        console.log('Players fetched:', data);
+        setPlayers(data.players);
+        setShowReportModal(true);
+      })
+      .catch(err => console.error('Failed to fetch players:', err));
   };
 
+  const handleReportSubmit = (reportedPlayerId) => {
+    console.log('Reporting player:', reportedPlayerId);
+    // Send to backend:
+    fetch('/api/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reporterId: session.player_id,
+        reportedPlayerId,
+      }),
+    });
+    setShowReportModal(false);
+  };
+  
   return (
     <div className="min-h-screen bg-black text-white p-4 flex flex-col">
+      
+      {showReportModal && (
+        <ReportModal
+          players={players}
+          onReport={handleReportSubmit}
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
+
       <GlobalProgress progress={globalProgress} />
       <h1 className="text-3xl md:text-4xl font-bold mb-4 text-center">My Tasks</h1>
 

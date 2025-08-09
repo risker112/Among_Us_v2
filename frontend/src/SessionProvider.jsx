@@ -30,6 +30,8 @@ export const SessionProvider = ({ children }) => {
       // Redirect logic based on game state
       if (data.game_state == 'game' && !window.location.pathname.startsWith('/game')) {
         navigate('/game');
+      } else if (data.game_state == 'vote') {
+        navigate('/game/vote');
       } else if (data.game_state == 'lobby') {
         navigate('/lobby');
       } else if (data.game_state == 'pregame') {

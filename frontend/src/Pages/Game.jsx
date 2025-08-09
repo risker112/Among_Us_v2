@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSocket } from '../SocketProvider';
 import { useSession } from '../SessionProvider';
+import ReportedBody from '../Components/ReportedBody.jsx';
 
 function Game() {
   const { session } = useSession();
@@ -14,6 +15,11 @@ function Game() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const { addMessageListener } = useSocket();
+  const [reportedPlayer, setReportedPlayer] = useState({
+    character: '',
+    name: ''
+  });
+  const [report, setReport] = useState(false);
 
   useEffect(() => {
     if (session?.role && session?.character) {
@@ -61,6 +67,12 @@ function Game() {
       } else if (msg.type === 'global_progress') {
         console.log('Global progress update:', msg.progress);
         setGlobalProgress(msg.progress);
+      } else if (msg.type === 'report') {
+        setReport(true);
+        setReportedPlayer({
+          character: msg.character,
+          name: msg.name,
+        });
       }
 
     });
@@ -70,7 +82,11 @@ function Game() {
 
   return (
     <div>
-      <Outlet context={{ role, character, globalProgress, vote, emergency, tasks }} />
+      {report ? (
+        <ReportedBody character={reportedPlayer.character} name={reportedPlayer.name} />
+      ) : (
+        <Outlet context={{ role, character, globalProgress, vote, emergency, tasks }} />
+      )}
     </div>
   );
 }

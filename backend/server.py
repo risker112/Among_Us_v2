@@ -33,6 +33,7 @@ with open("../frontend/src/assets/tasks.json", "r") as f:
 connected_players: Dict[str, Dict] = {}
 player_roles = None
 players_tasks = {}
+killed = []
 sabotage_timers = {}
 game_state = "welcome"
 MAX_PLAYERS = 13
@@ -91,6 +92,10 @@ async def join_game(request: Request):
 @app.get("/api/players")
 async def get_players():
     await broadcast_player_list()
+    print(connected_players)
+    players = [{"id": p["id"], "name": p["name"], "character": p["session"]["character"]} for p in connected_players.values()]
+
+    return {"players": players}
 
 async def broadcast_player_list():
     players = [{"id": p["id"], "name": p["name"]} for p in connected_players.values()]
@@ -205,13 +210,7 @@ async def get_session(request: Request):
     }
 
 def calc_num_impostors(num_players):
-    if num_players <= 6:
-        return 1
-    elif num_players <= 13:
-        return 2
-    else:
-        # případně rozšířit logiku pro víc hráčů
-        return max(2, num_players // 7)  # třeba 1 Impostor na každých 7 hráčů
+    return 1
 
 def assign_player_tasks(player_id: str):
     """Assign unique tasks to each player based on their role."""
@@ -657,6 +656,34 @@ async def start_voting_after(seconds):
                 })
             except Exception as e:
                 print(f"Error sending redirect to {pid}: {e}")
+
+# ────────────────────────────────────────────────────────────── report
+@app.post("/api/report")
+async def submit_report(request: Request):
+    global game_state
+    data = await request.json()
+    reported_id = data.get("reportedPlayerId")
+    
+    # Store the report
+    killed.append(reported_id)
+    game_state = "vote"
+
+    # if len(killed) >= len(connected_players) - 2:
+    #     await end_game()
+
+    # Notify all players about the report
+    for pid, player in connected_players.items():
+        if player.get("ws"):
+            try:
+                await player["ws"].send_json({
+                    "type": "report",
+                    "name": connected_players[reported_id]["session"]["name"],
+                    "character": connected_players[reported_id]["session"]["character"],
+                })
+            except Exception as e:
+                print(f"Error sending report to {pid}: {e}")
+                
+    return {"message": "Report received"}
 
 if __name__ == "__main__":
     uvicorn.run(
