@@ -1,19 +1,14 @@
 import { useEffect, useState } from 'react';
+import { useSession } from '../SessionProvider';
 
-// Example player data (replace with real backend data or context)
-const allPlayers = [
-  { id: 1, character: 'ch1.png' },
-  { id: 2, character: 'ch2.png' },
-  { id: 3, character: 'ch3.png' },
-  { id: 4, character: 'ch4.png' },
-];
-
-// Simulate current user (voter) character
-const currentUserCharacter = 'ch2.png';
 
 export default function Vote() {
   const [votes, setVotes] = useState({}); // {playerId: [voter1.png, voter2.png]}
   const [selected, setSelected] = useState(null); // Currently selected target
+  const { session } = useSession();
+  const currentUserCharacter = session?.user?.character || 'default.png';
+  const allPlayers = session?.players || [];
+
 
   // Toggle vote
   const handleVote = (playerId) => {

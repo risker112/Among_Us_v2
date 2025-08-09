@@ -37,6 +37,7 @@ sabotage_timers = {}
 game_state = "welcome"
 MAX_PLAYERS = 13
 TOTAL_TASKS = 3
+SABOTAGE_DURATION = 60
 
 class ConnectionManager:
     def __init__(self):
@@ -371,6 +372,14 @@ async def update_task(request: Request):
     if player_id not in connected_players:
         return JSONResponse(status_code=404, content={"error": "Player not connected"})
 
+    start_time = sabotage_timers.get(player_id, 0)
+
+    if time.time() - start_time < SABOTAGE_DURATION:
+        return JSONResponse(
+            status_code=403,
+            content={"error": "Tasks locked during sabotage"}
+        )
+    
     # Inicializuj úlohy hráča, ak ešte nemá
     if player_id not in players_tasks:
         players_tasks[player_id] = {}
@@ -443,18 +452,55 @@ async def start_sabotage(request: Request):
     player_id = request.session.get("player_id")
     if not player_id:
         return JSONResponse(status_code=403, content={"error": "Unauthorized"})
+    
+    # Only impostors can start sabotage
+    if player_roles.get(player_id)['role'] != "Impostor":
+        return JSONResponse(status_code=403, content={"error": "Only impostors can sabotage"})
 
-    sabotage_timers[player_id] = time.time()
-    return {"startedAt": sabotage_timers[player_id]}
+    # Set timer for all players
+    current_time = time.time()
+    for pid in player_roles.keys():
+        sabotage_timers[pid] = current_time
+    
+    return {"message": "Sabotage started", "duration": SABOTAGE_DURATION}
 
 @app.get("/api/sabotage")
-async def get_sabotage_timer(request: Request):
+async def get_sabotage(request: Request):
     player_id = request.session.get("player_id")
     if not player_id:
         return JSONResponse(status_code=403, content={"error": "Unauthorized"})
 
-    started = sabotage_timers.get(player_id)
-    return {"startedAt": started}
+    start_time = sabotage_timers.get(player_id)
+    if not start_time:
+        return JSONResponse(status_code=404, content={"error": "No active sabotage"})
+
+    elapsed = time.time() - start_time
+    remaining = max(0, SABOTAGE_DURATION - elapsed)
+
+    return {
+        "active": remaining > 0,
+        "remaining": remaining,
+        "endsAt": start_time + SABOTAGE_DURATION
+    }
+
+@app.get("/api/sabotage/status")
+async def get_sabotage_status(request: Request):
+    player_id = request.session.get("player_id")
+    if not player_id:
+        return JSONResponse(status_code=403, content={"error": "Unauthorized"})
+
+    start_time = sabotage_timers.get(player_id)
+    if not start_time:
+        return {"active": False, "remaining": 0}
+    
+    elapsed = time.time() - start_time
+    remaining = max(0, SABOTAGE_DURATION - elapsed)
+    
+    return {
+        "active": remaining > 0,
+        "remaining": remaining,
+        "endsAt": start_time + SABOTAGE_DURATION
+    }
 
 # ───────────────────────────────────────────────────────────── session management
 @app.post("/api/session/leave")

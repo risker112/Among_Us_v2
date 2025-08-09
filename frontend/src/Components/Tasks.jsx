@@ -9,6 +9,8 @@ export default function Tasks() {
   const { globalProgress, tasks: backendTasks } = useOutletContext();
   const [myTasks, setMyTasks] = useState([]);
   const [progress, setProgress] = useState(0);
+  const [sabotageActive, setSabotageActive] = useState(false);
+  const [sabotageRemaining, setSabotageRemaining] = useState(0);
 
   // Load my tasks from backendTasks
   useEffect(() => {
@@ -22,6 +24,23 @@ export default function Tasks() {
     })));
   }, [backendTasks]);
 
+  useEffect(() => {
+    const checkSabotage = async () => {
+      try {
+        const res = await fetch('/api/sabotage/status');
+        const data = await res.json();
+        setSabotageActive(data.active);
+        setSabotageRemaining(Math.ceil(data.remaining));
+      } catch (err) {
+        console.error('Failed to check sabotage:', err);
+      }
+    };
+    
+    checkSabotage();
+    const interval = setInterval(checkSabotage, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
   // Calculate progress
   useEffect(() => {
     if (!myTasks.length) {
@@ -33,6 +52,7 @@ export default function Tasks() {
   }, [myTasks]);
 
   const toggleTask = async (id) => {
+    if(sabotageActive) return;
     // Optimistic update
     setMyTasks(prev =>
       prev.map(t => (t.id === id ? { ...t, done: !t.done } : t))
@@ -92,6 +112,7 @@ export default function Tasks() {
                 checked={done}
                 onChange={() => toggleTask(id)}
                 className="mr-4 w-12 h-12 cursor-pointer accent-green-500"
+                disabled={sabotageActive}
               />
               <span className={`text-lg ${done ? 'line-through text-gray-400' : 'select-none'}`}>
                 {title}

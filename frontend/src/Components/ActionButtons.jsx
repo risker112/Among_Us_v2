@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 
-export default function ActionButtons({ onReportKill }) {
+export default function ActionButtons({ onReportKill, timeLeft, onSabotage, cooldown }) {
   const navigate = useNavigate();
   const { role } = useOutletContext();
 
-  const [cooldown, setCooldown] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(0); // in seconds
+
 
   const handleEmergency = () => {
     navigate('/game/emergency');
@@ -16,54 +15,9 @@ export default function ActionButtons({ onReportKill }) {
     navigate('/game/map');
   };
 
-  const onSabotage = async () => {
-    const res = await fetch("/api/sabotage", {
-      method: "POST",
-      credentials: "include",
-    });
-    const data = await res.json();
-    setCooldown(true);
-    setTimeLeft(300); // local timer starts fresh
-  };
 
-  useEffect(() => {
-    const fetchCooldown = async () => {
-      const res = await fetch("/api/sabotage", { credentials: 'include' });
-      const data = await res.json();
-      if (data.startedAt) {
-        const elapsed = Math.floor((Date.now() / 1000) - data.startedAt);
-        const remaining = 300 - elapsed;
-        if (remaining > 0) {
-          setCooldown(true);
-          setTimeLeft(remaining);
-        }
-      }
-    };
-    fetchCooldown();
-  }, []);
 
-  useEffect(() => {
-    if (!cooldown) return;
 
-    const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setCooldown(false);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [cooldown]);
-
-  const formatTime = (seconds) => {
-    const min = Math.floor(seconds / 60);
-    const sec = seconds % 60;
-    return `${min}:${sec.toString().padStart(2, '0')}`;
-  };
 
   return (
     <>
@@ -111,7 +65,7 @@ export default function ActionButtons({ onReportKill }) {
             // Sabotage Cooldown Button for Impostors
             <button
               className="fixed bottom-52 right-4 bg-gray-400 rounded-full w-20 h-20 flex items-center justify-center shadow-xl cursor-not-allowed opacity-75"
-              title={`Sabotage Cooldown: ${formatTime(timeLeft)}`}
+              title={`Sabotage Cooldown: ${timeLeft}`}
               disabled
             >
               <div className="flex flex-col items-center">
@@ -120,7 +74,7 @@ export default function ActionButtons({ onReportKill }) {
                   alt="Sabotage" 
                   className="w-8 h-8 object-contain opacity-50 mb-1" 
                 />
-                <span className="text-xs font-bold text-white">{formatTime(timeLeft)}</span>
+                <span className="text-xs font-bold text-white">{timeLeft}</span>
               </div>
             </button>
           ) : (

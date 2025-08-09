@@ -11,6 +11,8 @@ export default function Impostor() {
   const [myTasks, setMyTasks] = useState([]);
   const [progress, setProgress] = useState(0);
 
+  const [cooldown, setCooldown] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0); // in seconds
   // Load my tasks from backendTasks
   useEffect(() => {
     if (!backendTasks || backendTasks.length === 0) return;
@@ -38,27 +40,59 @@ export default function Impostor() {
     setMyTasks(prev =>
       prev.map(t => (t.id === id ? { ...t, done: !t.done } : t))
     );
+  };
 
-    // try {
-    //   const taskState = myTasks.find(t => t.id === id);
-    //   const newDoneState = taskState ? !taskState.done : true;
+  const handleReportKill = () => {
+    // Logic to handle reporting a kill
+    console.log('Report Kill button clicked');
+  }
 
-    //   const res = await fetch('/api/update-task', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({
-    //       taskId: id,
-    //       done: newDoneState,
-    //       playerId: session.player_id,
-    //     }),
-    //   });
+  const onSabotage = async () => {
+    const res = await fetch("/api/sabotage", {
+      method: "POST",
+      credentials: "include",
+    });
+    const data = await res.json();
+    setCooldown(true);
+    setTimeLeft(300); // local timer starts fresh
+  };
 
-    //   if (!res.ok) throw new Error('Failed to update task');
-    //   await res.json(); // you can handle server's response if needed
-    // } catch (err) {
-    //   console.error(err);
-    //   // rollback could be implemented here if necessary
-    // }
+    useEffect(() => {
+    const fetchCooldown = async () => {
+      const res = await fetch("/api/sabotage", { credentials: 'include' });
+      const data = await res.json();
+      if (data.remaining) {
+        const remaining = Math.floor(data.remaining);
+        if (remaining > 0) {
+          setCooldown(true);
+          setTimeLeft(remaining);
+        }
+      }
+    };
+    fetchCooldown();
+  }, []);
+
+  useEffect(() => {
+    if (!cooldown) return;
+
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setCooldown(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [cooldown]);
+
+  const formatTime = (seconds) => {
+    const min = Math.floor(seconds / 60);
+    const sec = seconds % 60;
+    return `${min}:${sec.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -87,6 +121,7 @@ export default function Impostor() {
                 checked={done}
                 onChange={() => toggleTask(id)}
                 className="mr-4 w-12 h-12 cursor-pointer accent-green-500"
+                disabled={cooldown}
               />
               <span className={`text-lg ${done ? 'line-through text-gray-400' : 'select-none'}`}>
                 {title}
@@ -95,7 +130,7 @@ export default function Impostor() {
           ))}
         </ul>
       </section>
-      <ActionButtons />
+      <ActionButtons onReportKill={handleReportKill} timeLeft={formatTime(timeLeft)} onSabotage={onSabotage} cooldown={cooldown} />
     </div>
   );
 }
