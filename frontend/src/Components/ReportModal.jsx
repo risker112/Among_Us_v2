@@ -29,7 +29,7 @@ function ReportModal({ players, onReport, onClose }) {
                     <img 
                         src={`src/assets/characters/${player.character}`} 
                         alt={`${player.name}'s character`}
-                        className="w-full h-full object-cover"
+                        className={`w-full h-full object-cover ${player.ghost ? "grayscale" : ''}`}
                     />
                     </div>
 
@@ -43,7 +43,7 @@ function ReportModal({ players, onReport, onClose }) {
                             : 'bg-gray-700 hover:bg-gray-600'
                     }`}
                     onClick={() => player.id !== session.player_id && setSelectedPlayer(player.id)}
-                    disabled={player.id === session.player_id}
+                    disabled={player.id === session.player_id || player.ghost}
                     >
                     <span className="text-lg font-medium"> {/* Larger text */}
                         {player.name}

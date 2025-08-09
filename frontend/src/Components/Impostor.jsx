@@ -130,7 +130,7 @@ export default function Impostor() {
           ))}
         </ul>
       </section>
-      <ActionButtons onReportKill={handleReportKill} timeLeft={formatTime(timeLeft)} onSabotage={onSabotage} cooldown={cooldown} />
+      <ActionButtons onReportKill={handleReportKill} timeLeft={formatTime(timeLeft)} onSabotage={onSabotage} cooldown={cooldown} ghost={session?.is_ghost} />
     </div>
   );
 }

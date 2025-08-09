@@ -20,7 +20,6 @@ export default function Emergency() {
   useEffect(() => {
     // Add message listener for this component
     const removeListener = addMessageListener((msg) => {
-      console.log('Emergency message received:', msg);
       switch (msg.type) {
         case 'emergency_flash':
           setFlashing(true);
@@ -31,10 +30,8 @@ export default function Emergency() {
           setCountdown(msg.seconds_left);
           break;
           
-        case 'redirect':
-          if (msg.path === '/game/vote') {
-            navigate('/game/vote');
-          }
+        case 'vote_started':
+          navigate('/game/vote');
           break;
           
         case 'emergency_cancelled':

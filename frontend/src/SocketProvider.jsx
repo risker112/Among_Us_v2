@@ -25,7 +25,7 @@ export function SocketProvider({ children }) {
   useEffect(() => {
     if (!session?.player_id) return;
 
-    const wsUrl = `ws://192.168.0.105:8000/ws`;
+    const wsUrl = `ws://192.168.0.222:8000/ws`;
     const ws = new WebSocket(wsUrl);
     socketRef.current = ws;
 

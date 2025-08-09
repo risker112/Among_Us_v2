@@ -31,14 +31,18 @@ with open("../frontend/src/assets/tasks.json", "r") as f:
 
 # Game state
 connected_players: Dict[str, Dict] = {}
+# alive_players = []
 player_roles = None
+votes = {}
 players_tasks = {}
-killed = []
+ghost_players = []
 sabotage_timers = {}
 game_state = "welcome"
+vote_start_time = None
 MAX_PLAYERS = 13
 TOTAL_TASKS = 3
 SABOTAGE_DURATION = 60
+VOTE_DURATION = 120
 
 class ConnectionManager:
     def __init__(self):
@@ -92,8 +96,7 @@ async def join_game(request: Request):
 @app.get("/api/players")
 async def get_players():
     await broadcast_player_list()
-    print(connected_players)
-    players = [{"id": p["id"], "name": p["name"], "character": p["session"]["character"]} for p in connected_players.values()]
+    players = [{"id": p["id"], "name": p["name"], "character": p["session"]["character"], "ghost": p["session"].get("is_ghost", False)} for p in connected_players.values()]
 
     return {"players": players}
 
@@ -140,7 +143,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Handle join message (if still needed)
                     if player_id in connected_players:
                         connected_players[player_id]["ws"] = websocket
-                        print(f"{connected_players[player_id]['name']} reconnected")
                         
                         await websocket.send_json({
                             "type": "players_update",
@@ -171,7 +173,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await broadcast_player_list()
 
 async def send_player_list(websocket):
-    players = [{"id": p["id"], "name": p["name"]} for p in connected_players.values()]
+    players = [{"id": p["id"], "name": p["name"], "ghost": p["session"].get("is_ghost", False)} for p in connected_players.values()]
     await websocket.send_json({
         "type": "players_update",
         "players": players,
@@ -206,7 +208,8 @@ async def get_session(request: Request):
         "name": name,
         "game_state": game_state,
         "role": player_roles.get(player_id, {}).get("role") if player_roles else None,
-        "character": player_roles.get(player_id, {}).get("character") if player_roles else None
+        "character": player_roles.get(player_id, {}).get("character") if player_roles else None,
+        "is_ghost": player_id in ghost_players
     }
 
 def calc_num_impostors(num_players):
@@ -222,10 +225,7 @@ def assign_player_tasks(player_id: str):
     
     role = player_roles.get(player_id)['role']
     players_tasks[player_id] = {}  # Reset tasks for this player
-    print(f"Assigning tasks for {player_id} (Role: {role})")
     if role == "Impostor":
-        print(role)
-
         # Assign fake tasks (sabotage)
         available_fake_tasks = [t for t in ALL_TASKS 
                               if t["type"] == "sabotage" 
@@ -238,7 +238,6 @@ def assign_player_tasks(player_id: str):
             available_fake_tasks.remove(task)  # Prevent re-selection
             
     else:
-        print(role)
         # Assign real tasks (normal)
         available_real_tasks = [t for t in ALL_TASKS 
                               if t["type"] == "normal" 
@@ -250,11 +249,9 @@ def assign_player_tasks(player_id: str):
             assigned_task_ids.add(task["id"])
             available_real_tasks.remove(task)  # Prevent re-selection
     
-    print(f"Assigned tasks to {player_id} (Role: {role}): {players_tasks[player_id]}")
-
 @app.post("/api/start")
 async def start_game(request: Request):
-    global player_roles, game_state, connected_players
+    global player_roles, game_state, connected_players, alive_players
     
     player_id = request.session.get("player_id")
     if not player_id:
@@ -270,6 +267,7 @@ async def start_game(request: Request):
     player_ids = list(connected_players.keys())
     num_players = len(player_ids)
     num_impostors = calc_num_impostors(num_players)
+    alive_players = player_ids.copy()
 
     roles = ["Impostor"] * num_impostors + ["Crewmate"] * (num_players - num_impostors)
     characters = [f"ch{i + 1}.png" for i in range(num_players)]
@@ -290,6 +288,7 @@ async def start_game(request: Request):
         player = connected_players[pid]
         player["session"]["role"] = role
         player["session"]["character"] = character
+        player["session"]["is_ghost"] = False
 
         if player.get("ws"):
             try:
@@ -537,8 +536,6 @@ async def update_session(request: Request):
         if 'character' in data:
             connected_players[player_id]['session']['character'] = data['character']
 
-    print(f"Updated session for player {player_id}: {data}")
-    print(connected_players[player_id]['session'])
     return {
         "status": "success",
         **data
@@ -573,6 +570,8 @@ async def end_game(request: Request):
     player_roles = None
     players_tasks = {}
     sabotage_timers = {}
+    votes.clear()
+    ghost_players.clear()
     game_state = "lobby"
 
     # Keep players connected but clear their game-specific session data
@@ -580,6 +579,7 @@ async def end_game(request: Request):
         if "session" in player:
             player["session"].pop("role", None)
             player["session"].pop("character", None)
+            player["session"].pop("is_ghost", None)
         
         # Notify players via WebSocket
         if player.get("ws"):
@@ -628,8 +628,8 @@ async def call_emergency(request: Request):
     return {"message": "Emergency meeting called"}
 
 async def start_voting_after(seconds):
-    global game_state
-
+    global game_state, votes, vote_start_time
+    
     # Count down and broadcast to all clients
     for i in range(seconds, 0, -1):
         for pid, player in connected_players.items():
@@ -643,19 +643,56 @@ async def start_voting_after(seconds):
                     print(f"Error sending countdown to {pid}: {e}")
         await asyncio.sleep(1)
 
-    # Change game state
+    # Initialize voting state
     game_state = "vote"
+    votes = {}
+    vote_start_time = time.time()
 
-    # Final redirect broadcast
+    # Broadcast voting start with initial time
     for pid, player in connected_players.items():
         if player.get("ws"):
             try:
                 await player["ws"].send_json({
-                    "type": "redirect",
-                    "path": "/game/vote"
+                    "type": "vote_started",
+                    "time_left": VOTE_DURATION,
+                    "votes": votes
                 })
             except Exception as e:
-                print(f"Error sending redirect to {pid}: {e}")
+                print(f"Error sending vote start to {pid}: {e}")
+
+    # Start background task to update time for all clients
+    asyncio.create_task(update_vote_time())
+
+async def update_vote_time():
+    global game_state, votes, vote_start_time
+    """Background task to update time remaining for all clients"""
+    while game_state == "vote":
+        time_left = max(0, VOTE_DURATION - (time.time() - vote_start_time))
+        
+        # Broadcast to all connected players
+        for pid, player in connected_players.items():
+            if player.get("ws"):
+                try:
+                    await player["ws"].send_json({
+                        "type": "vote_update",
+                        "time_left": time_left,
+                        "votes": votes
+                    })
+                except Exception as e:
+                    print(f"Error sending time update to {pid}: {e}")
+        
+        # End voting if time's up
+        if time_left <= 0:
+            await end_voting()
+            break
+            
+        await asyncio.sleep(1)
+
+async def end_voting():
+    global game_state
+    game_state = "voting_ended"
+    # Add your voting result processing logic here
+    print("Voting ended with results:", votes)
 
 # ────────────────────────────────────────────────────────────── report
 @app.post("/api/report")
@@ -665,10 +702,11 @@ async def submit_report(request: Request):
     reported_id = data.get("reportedPlayerId")
     
     # Store the report
-    killed.append(reported_id)
+    ghost_players.append(reported_id)
+    connected_players[reported_id]["session"]["is_ghost"] = True
     game_state = "vote"
 
-    # if len(killed) >= len(connected_players) - 2:
+    # if len(killed) >= len(connected_players) - 3:
     #     await end_game()
 
     # Notify all players about the report
@@ -682,8 +720,53 @@ async def submit_report(request: Request):
                 })
             except Exception as e:
                 print(f"Error sending report to {pid}: {e}")
-                
+    
+    asyncio.create_task(start_voting_after(10))  # 10 seconds of flashing
+    
     return {"message": "Report received"}
+
+@app.post('/api/vote')
+async def submit_vote(request: Request):
+    global game_state, votes
+
+    if game_state != "vote":
+        raise HTTPException(status_code=400, detail="Not in voting phase")
+
+    data = await request.json()
+    voter_id = data.get("voterId")  # Should come from session or client
+    target_id = data.get("targetId")
+
+    if not voter_id:
+        raise HTTPException(status_code=400, detail="Invalid vote")
+
+    # Record the vote (overwrites if same voter votes again)
+    votes[voter_id] = target_id
+    print("Current votes:", votes)
+
+    # Broadcast updated votes to all clients
+    for pid, player in connected_players.items():
+        if player.get("ws"):
+            try:
+                await player["ws"].send_json({
+                    "type": "vote_update",
+                    "time_left": max(0, VOTE_DURATION - (time.time() - vote_start_time)),
+                    "votes": votes
+                })
+            except Exception as e:
+                print(f"Error sending vote update to {pid}: {e}")
+
+    return {"message": "Vote submitted", "votes": votes}
+
+@app.get('/api/votes')
+async def get_votes():
+    global game_state, votes, vote_start_time
+    print(vote_start_time)
+    time_left = max(0, VOTE_DURATION - (time.time() - vote_start_time)) if game_state == "vote" else 0
+    return {
+        "votes": votes,
+        "time_left": time_left,
+        "game_state": game_state
+    }
 
 if __name__ == "__main__":
     uvicorn.run(

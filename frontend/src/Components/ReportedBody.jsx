@@ -7,7 +7,7 @@ export default function ReportedBody({ character, name }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       navigate('game/vote'); // Navigate to voting after 3 seconds
-    }, 5000);
+    }, 10000);
 
     return () => clearTimeout(timer);
   }, [navigate]);
@@ -23,7 +23,7 @@ export default function ReportedBody({ character, name }) {
             <img
               src={`src/assets/characters/${character}`}
               alt={`${name}'s character`}
-              className="w-full h-full object-cover grayscale"
+              className="w-full h-full object-cover"
             />
           </div>
         </div>

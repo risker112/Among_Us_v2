@@ -110,7 +110,7 @@ export default function Tasks() {
     });
     setShowReportModal(false);
   };
-  
+
   return (
     <div className="min-h-screen bg-black text-white p-4 flex flex-col">
       
@@ -157,7 +157,7 @@ export default function Tasks() {
           ))}
         </ul>
       </section>
-      <ActionButtons onReportKill={handleReportKill} role={'Crewmate'} />
+      <ActionButtons onReportKill={handleReportKill} role={'Crewmate'} ghost={session?.is_ghost} />
     </div>
   );
 }
