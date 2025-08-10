@@ -1,14 +1,14 @@
 import React, { useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
-export default function EjectionScreen() {
+export default function EjectionScreen({ result }) {
   const navigate = useNavigate();
-  const location = useLocation();;
+  console.log(result);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       navigate('/game'); // Navigate back to game after 5 seconds
-    }, 5000);
+    }, 10000);
 
     return () => clearTimeout(timer);
   }, [navigate]);
@@ -18,26 +18,26 @@ export default function EjectionScreen() {
       <div className="text-center max-w-md">
         {/* Player image with red/green border */}
         <div className={`mx-auto mb-6 w-40 h-40 rounded-full overflow-hidden border-4 ${
-          wasImpostor ? 'border-red-600' : 'border-green-500'
+          result.role == "Impostor" ? 'border-red-600' : 'border-green-500'
         }`}>
           <img
-            src={`src/assets/characters/${player.character}`}
-            alt={player.name}
+            src={`/src/assets/characters/${result.character}`}
+            alt={result.name}
             className="w-full h-full object-cover"
           />
         </div>
 
         {/* Result text */}
-        <h1 className="text-4xl font-bold mb-2">{player.name}</h1>
+        <h1 className="text-4xl font-bold mb-2 text-white">{result.name}</h1>
         <h2 className={`text-3xl font-bold mb-6 ${
-          wasImpostor ? 'text-red-500' : 'text-green-400'
+          result.role == "Impostor" ? 'text-red-500' : 'text-green-400'
         }`}>
-          {wasImpostor ? 'WAS AN IMPOSTOR' : 'WAS NOT AN IMPOSTOR'}
+          {result.role == "Impostor" ? 'WAS AN IMPOSTOR' : 'WAS NOT AN IMPOSTOR'}
         </h2>
 
         {/* Additional flavor text */}
         <p className="text-gray-400 text-lg">
-          {wasImpostor 
+          {result.role == "Impostor" 
             ? 'The crewmates have successfully identified the threat!'
             : 'The crewmates made a terrible mistake...'}
         </p>

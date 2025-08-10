@@ -31,7 +31,7 @@ with open("../frontend/src/assets/tasks.json", "r") as f:
 
 # Game state
 connected_players: Dict[str, Dict] = {}
-# alive_players = []
+alive_players = None
 player_roles = None
 votes = {}
 players_tasks = {}
@@ -684,16 +684,15 @@ async def update_vote_time():
         # End voting if time's up
         if time_left <= 0:
             await end_voting()
+            await calculate_result()
             break
             
         await asyncio.sleep(1)
 
 async def end_voting():
     global game_state
-    game_state = "voting_ended"
+    game_state = "game"
     # Add your voting result processing logic here
-    print("Voting ended with results:", votes)
-
 # ────────────────────────────────────────────────────────────── report
 @app.post("/api/report")
 async def submit_report(request: Request):
@@ -704,6 +703,7 @@ async def submit_report(request: Request):
     # Store the report
     ghost_players.append(reported_id)
     connected_players[reported_id]["session"]["is_ghost"] = True
+    alive_players.remove(reported_id)
     game_state = "vote"
 
     # if len(killed) >= len(connected_players) - 3:
@@ -741,7 +741,10 @@ async def submit_vote(request: Request):
 
     # Record the vote (overwrites if same voter votes again)
     votes[voter_id] = target_id
-    print("Current votes:", votes)
+
+    if len(votes) == len(alive_players):
+       await calculate_result()
+       return 
 
     # Broadcast updated votes to all clients
     for pid, player in connected_players.items():
@@ -755,7 +758,64 @@ async def submit_vote(request: Request):
             except Exception as e:
                 print(f"Error sending vote update to {pid}: {e}")
 
+
     return {"message": "Vote submitted", "votes": votes}
+
+async def calculate_result():
+    global alive_players, ghost_players, connected_players
+    results = process_votes(votes, alive_players)
+    alive_players.remove(results)
+    ghost_players.append(results)
+    connected_players[results]["session"]["is_ghost"] = True
+
+    await end_voting()
+
+    for pid, player in connected_players.items():
+        if player.get("ws"):
+            try:
+                await player["ws"].send_json({
+                    "type": "results",
+                    "name": connected_players[results]['name'],
+                    'character': connected_players[results]['session']['character'],
+                    'role': connected_players[results]['session']['role'],
+                })
+            except Exception as e:
+                print(f"Error sending vote update to {pid}: {e}")
+
+def process_votes(votes, alive_players):
+    """
+    votes: dict {voter_id: target_id or None}
+    alive_players: list of player_ids that are still alive
+    """
+    # Only process if all alive players have voted
+    if len(votes) < len(alive_players):
+        return None  # Not all votes in yet
+
+    # Count votes per target
+    vote_count = {}
+    for voter, target in votes.items():
+        if target is not None:  # skip "skip vote"
+            vote_count[target] = vote_count.get(target, 0) + 1
+
+    if not vote_count:
+        return None  # all skipped, no one gets kicked
+
+    # Find max votes received
+    max_votes = max(vote_count.values())
+    # Players with the most votes
+    top_targets = [pid for pid, count in vote_count.items() if count == max_votes]
+
+    # Majority rule: must have >= half the votes from alive players
+    if max_votes >= (len(alive_players) / 2):
+        if len(top_targets) == 1:
+            # Clear winner
+            return top_targets[0]
+        else:
+            # Tie — randomly pick one to kick
+            return random.choice(top_targets)
+
+    # No one meets majority requirement
+    return None
 
 @app.get('/api/votes')
 async def get_votes():

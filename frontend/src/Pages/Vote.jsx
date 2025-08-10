@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '../SessionProvider';
 import { useSocket } from '../SocketProvider';
+import EjectionScreen from '../Components/EjectionScreen';
+import ResultScreen from '../Components/ResultScreen';
 
 export default function VotePage() {
   const navigate = useNavigate();
@@ -12,6 +14,8 @@ export default function VotePage() {
   const [votingComplete, setVotingComplete] = useState(false);
   const { session } = useSession();
   const { socket, addMessageListener } = useSocket();
+  const [result, setResult] = useState(false);
+  const [gameEnd, setGameEnd] = useState(false);
 
   // Initialize WebSocket connection
    // Initialize and handle socket messages
@@ -31,8 +35,16 @@ export default function VotePage() {
           setVotingComplete(true);
           // Handle vote results if needed
           break;
-        case 'redirect':
-          navigate(data.path);
+        case 'game_end':
+          setGameEnd(data.winner)
+          // navigate(data.path);
+          break;
+        case 'results':
+          setResult({
+            name: data.name,
+            character: data.character,
+            role: data.role
+          });
           break;
         default:
           break;
@@ -125,6 +137,9 @@ export default function VotePage() {
       console.error('Skip vote error:', error);
     }
   };
+
+  if (result) return (<EjectionScreen result={result}></EjectionScreen>);
+  if (gameEnd) return (<ResultScreen></ResultScreen>);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col">
