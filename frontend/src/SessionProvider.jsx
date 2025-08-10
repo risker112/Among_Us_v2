@@ -38,6 +38,8 @@ export const SessionProvider = ({ children }) => {
         navigate('/pregame');
       } else if (data.game_state == 'welcome') {
         navigate('/welcome');
+      } else if (data.game_state == 'aftergame') {
+        navigate('game/aftergame');
       }
 
       return data;

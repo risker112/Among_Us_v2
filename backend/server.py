@@ -40,7 +40,7 @@ sabotage_timers = {}
 game_state = "welcome"
 vote_start_time = None
 MAX_PLAYERS = 13
-TOTAL_TASKS = 3
+TOTAL_TASKS = 12
 SABOTAGE_DURATION = 60
 VOTE_DURATION = 120
 
@@ -216,42 +216,22 @@ def calc_num_impostors(num_players):
     return 1
 
 def assign_player_tasks(player_id: str):
-    """Assign unique tasks to each player based on their role."""
-    global ALL_TASKS, players_tasks, assigned_task_ids
-    
-    # Initialize if not exists
-    if 'assigned_task_ids' not in globals():
-        assigned_task_ids = set()
-    
-    role = player_roles.get(player_id)['role']
-    players_tasks[player_id] = {}  # Reset tasks for this player
-    if role == "Impostor":
-        # Assign fake tasks (sabotage)
-        available_fake_tasks = [t for t in ALL_TASKS 
-                              if t["type"] == "sabotage" 
-                              and t["id"] not in assigned_task_ids]
+    global ALL_TASKS, players_tasks
+    players_tasks[player_id] = {}
+
+    for task in ALL_TASKS:
+        if not isinstance(task, dict):
+            print(f"Warning: task is not a dict: {task}")
+            continue
+        if "id" not in task:
+            print(f"Warning: task has no 'id': {task}")
+            continue
         
-        for _ in range(min(TOTAL_TASKS, len(available_fake_tasks))):
-            task = random.choice(available_fake_tasks)
-            players_tasks[player_id][str(task["id"])] = False
-            assigned_task_ids.add(task["id"])
-            available_fake_tasks.remove(task)  # Prevent re-selection
-            
-    else:
-        # Assign real tasks (normal)
-        available_real_tasks = [t for t in ALL_TASKS 
-                              if t["type"] == "normal" 
-                              and t["id"] not in assigned_task_ids]
-        
-        for _ in range(min(TOTAL_TASKS, len(available_real_tasks))):
-            task = random.choice(available_real_tasks)
-            players_tasks[player_id][str(task["id"])] = False
-            assigned_task_ids.add(task["id"])
-            available_real_tasks.remove(task)  # Prevent re-selection
+        players_tasks[player_id][str(task["id"])] = False
     
 @app.post("/api/start")
 async def start_game(request: Request):
-    global player_roles, game_state, connected_players, alive_players
+    global player_roles, game_state, connected_players, alive_players, players_tasks, sabotage_timers, votes, ghost_players
     
     player_id = request.session.get("player_id")
     if not player_id:
@@ -268,6 +248,12 @@ async def start_game(request: Request):
     num_players = len(player_ids)
     num_impostors = calc_num_impostors(num_players)
     alive_players = player_ids.copy()
+
+    player_roles = None
+    players_tasks = {}
+    sabotage_timers = {}
+    votes.clear()
+    ghost_players.clear()
 
     roles = ["Impostor"] * num_impostors + ["Crewmate"] * (num_players - num_impostors)
     characters = [f"ch{i + 1}.png" for i in range(num_players)]
@@ -384,7 +370,18 @@ async def update_task(request: Request):
 
     players_tasks[player_id][str(task_id)] = done
 
-    # Spočítaj globálny progress (v %)
+    global_progress = await get_global_progress()
+
+    if global_progress == 100:
+        await send_results()
+        game_state = "aftergame"
+        return
+
+    return {"globalProgress": global_progress}
+
+# Endpoint na získanie globálneho progresu
+async def get_global_progress():
+
     total_done = 0
     total_possible = 0
     
@@ -403,12 +400,6 @@ async def update_task(request: Request):
     else:
         global_progress = round((total_done / total_possible) * 100)
 
-    await get_global_progress(global_progress)
-
-    return {"globalProgress": global_progress}
-
-# Endpoint na získanie globálneho progresu
-async def get_global_progress(global_progress=0):
     players = [{"id": p["id"], "name": p["name"]} for p in connected_players.values()]
     message = {
         "type": "global_progress",
@@ -420,6 +411,8 @@ async def get_global_progress(global_progress=0):
             await player["ws"].send_json(message)
         except:
             player["ws"] = None
+
+    return global_progress
 
 @app.get("/api/global-progress")
 async def get_global_progress_endpoint(request: Request):
@@ -558,7 +551,7 @@ async def leave_lobby(request: Request):
     return {"message": "Left lobby"}
 
 @app.get("/api/game/end")
-async def end_game(request: Request):
+async def end_game():
     global player_roles, players_tasks, sabotage_timers, game_state
     
     # Only allow game owner or admin to end game
@@ -581,17 +574,6 @@ async def end_game(request: Request):
             player["session"].pop("character", None)
             player["session"].pop("is_ghost", None)
         
-        # Notify players via WebSocket
-        if player.get("ws"):
-            try:
-                await player["ws"].send_json({
-                    "type": "game_ended",
-                    "message": "Game has been reset"
-                })
-            except:
-                pass
-    
-    await broadcast_player_list()
     return {"message": "Game ended, returning to lobby"}
 
 #───────────────────────────────────────────────────────────── emergency meetings
@@ -669,34 +651,38 @@ async def update_vote_time():
     while game_state == "vote":
         time_left = max(0, VOTE_DURATION - (time.time() - vote_start_time))
         
-        # Broadcast to all connected players
-        for pid, player in connected_players.items():
-            if player.get("ws"):
-                try:
-                    await player["ws"].send_json({
-                        "type": "vote_update",
-                        "time_left": time_left,
-                        "votes": votes
-                    })
-                except Exception as e:
-                    print(f"Error sending time update to {pid}: {e}")
-        
         # End voting if time's up
         if time_left <= 0:
             await end_voting()
             await calculate_result()
             break
-            
-        await asyncio.sleep(1)
+        else:
+            # Broadcast to all connected players
+            for pid, player in connected_players.items():
+                if player.get("ws"):
+                    try:
+                        await player["ws"].send_json({
+                            "type": "vote_update",
+                            "time_left": time_left,
+                            "votes": votes
+                        })
+                    except Exception as e:
+                        print(f"Error sending time update to {pid}: {e}")
+
+            await asyncio.sleep(1)
 
 async def end_voting():
-    global game_state
-    game_state = "game"
-    # Add your voting result processing logic here
+    global game_state, alive_players
+
+    if len(alive_players) == 3:
+        game_state = "after_game"
+    else:
+        game_state = "game"
+
 # ────────────────────────────────────────────────────────────── report
 @app.post("/api/report")
 async def submit_report(request: Request):
-    global game_state
+    global game_state, alive_players
     data = await request.json()
     reported_id = data.get("reportedPlayerId")
     
@@ -706,8 +692,10 @@ async def submit_report(request: Request):
     alive_players.remove(reported_id)
     game_state = "vote"
 
-    # if len(killed) >= len(connected_players) - 3:
-    #     await end_game()
+    if len(alive_players) <= 3 or (connected_players[reported_id]["session"]['role'] == "Impostor"):
+        await send_results()
+        return
+        # await end_game()
 
     # Notify all players about the report
     for pid, player in connected_players.items():
@@ -764,63 +752,149 @@ async def submit_vote(request: Request):
 async def calculate_result():
     global alive_players, ghost_players, connected_players
     results = process_votes(votes, alive_players)
-    alive_players.remove(results)
-    ghost_players.append(results)
-    connected_players[results]["session"]["is_ghost"] = True
+    
+    print("happening --------------------ggkgnaaaajdnjdjdjankjdnjasdndjkgnsangjdsna:DDDDDD<333444")
+    # Handle case where someone was ejected
+    if results:
+        alive_players.remove(results)
+        ghost_players.append(results)
+        connected_players[results]["session"]["is_ghost"] = True
 
+        # Check if game should end
+        if len(alive_players) <= 3 or (connected_players[results]['session']['role'] == "Impostor"):
+            await send_results()
+            return 
+        
+        # Send ejection results to all players
+        for pid, player in connected_players.items():
+            if player.get("ws"):
+                try:
+                    await player["ws"].send_json({
+                        "type": "results",
+                        "ejected": {
+                            "name": connected_players[results]['name'],
+                            'character': connected_players[results]['session']['character'],
+                            'role': connected_players[results]['session']['role'],
+                        }
+                    })
+                except Exception as e:
+                    print(f"Error sending vote update to {pid}: {e}")
+    
+    # Handle case where no one was ejected
+    else:        
+        for pid, player in connected_players.items():
+            if player.get("ws"):
+                try:
+                    await player["ws"].send_json({
+                        "type": "results",
+                        "ejected": None  # Explicitly indicate no ejection
+                    })
+                except Exception as e:
+                    print(f"Error sending vote update to {pid}: {e}")
+    
     await end_voting()
+
+@app.get("/api/results")
+async def get_results():
+    global connected_players, alive_players, game_state
+
+    pg = await get_global_progress()
+
+    # Find all impostor IDs
+    impostor_ids = [
+        pid for pid, pdata in connected_players.items()
+        if pdata["session"]["role"] == "impostor"
+    ]
+    print("pg", pg)
+    if pg == 100:
+        winner = "Crew"
+    else:
+        if any(pid in alive_players for pid in impostor_ids):
+            winner = "Impostor"
+        else:
+            winner = "Crew"
+
+    # game_state = 'lobby'  # if needed, uncomment
+
+    return {"winner": winner}
+
+async def send_results():
+    global connected_players, alive_players, game_state
+
+    pg = await get_global_progress()
+
+    # Find all impostor IDs
+    impostor_ids = [
+        pid for pid, pdata in connected_players.items()
+        if pdata["session"]["role"] == "impostor"
+    ]
+    print("pg", pg)
+    if pg == 100:
+        winner = "Crew"
+    else:
+        if any(pid in alive_players for pid in impostor_ids):
+            winner = "Impostor"
+        else:
+            winner = "Crew"
+
+    print(winner)
+    game_state = 'aftergame'
 
     for pid, player in connected_players.items():
         if player.get("ws"):
             try:
                 await player["ws"].send_json({
-                    "type": "results",
-                    "name": connected_players[results]['name'],
-                    'character': connected_players[results]['session']['character'],
-                    'role': connected_players[results]['session']['role'],
+                    "type": "game_end",
+                    'winner': winner,
                 })
             except Exception as e:
                 print(f"Error sending vote update to {pid}: {e}")
+
+    # await end_game()
 
 def process_votes(votes, alive_players):
     """
     votes: dict {voter_id: target_id or None}
     alive_players: list of player_ids that are still alive
+    
+    Returns:
+    - player_id if someone is ejected
+    - None if no one is ejected (tie, insufficient votes, or majority skipped)
     """
     # Only process if all alive players have voted
     if len(votes) < len(alive_players):
         return None  # Not all votes in yet
 
-    # Count votes per target
+    # Count skip votes
+    skip_votes = sum(1 for target in votes.values() if target is None)
+    
+    # If majority skipped (half or more), no one gets ejected
+    if skip_votes >= len(alive_players) / 2:
+        return None
+
+    # Count votes per target (excluding skip votes)
     vote_count = {}
     for voter, target in votes.items():
         if target is not None:  # skip "skip vote"
             vote_count[target] = vote_count.get(target, 0) + 1
 
-    if not vote_count:
-        return None  # all skipped, no one gets kicked
-
     # Find max votes received
-    max_votes = max(vote_count.values())
+    max_votes = max(vote_count.values()) if vote_count else 0
     # Players with the most votes
     top_targets = [pid for pid, count in vote_count.items() if count == max_votes]
 
-    # Majority rule: must have >= half the votes from alive players
-    if max_votes >= (len(alive_players) / 2):
+    # Majority rule: must have > half of NON-SKIP votes to eject
+    required_majority = (len(alive_players) - skip_votes) / 2
+    if max_votes > required_majority:
         if len(top_targets) == 1:
-            # Clear winner
-            return top_targets[0]
-        else:
-            # Tie — randomly pick one to kick
-            return random.choice(top_targets)
-
-    # No one meets majority requirement
-    return None
+            return top_targets[0]  # Clear winner
+        return None  # Tie - no ejection
+    
+    return None  # No majority reached
 
 @app.get('/api/votes')
 async def get_votes():
     global game_state, votes, vote_start_time
-    print(vote_start_time)
     time_left = max(0, VOTE_DURATION - (time.time() - vote_start_time)) if game_state == "vote" else 0
     return {
         "votes": votes,

@@ -10,6 +10,7 @@ import Vote from './Pages/Vote.jsx';
 import Map from './Pages/Map.jsx';
 import { ProtectedRoute } from './ProtectedRoute';
 import './index.css';
+import ResultScreen from './Components/ResultScreen.jsx';
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
       <Route path="map" element={<Map />} />
       <Route path="emergency" element={<Emergency />} />
       <Route path="vote" element={<Vote />} />
+      <Route path="aftergame" element={<ResultScreen />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/welcome" replace />} />

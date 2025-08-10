@@ -73,6 +73,8 @@ function Game() {
           character: msg.character,
           name: msg.name,
         });
+      } else if (msg.type === 'game_end') {
+        navigate('/game/aftergame')
       }
 
     });

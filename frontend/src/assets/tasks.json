@@ -1,62 +1,62 @@
 [
     {
         "id": 1,
-        "title": "Puzzle",
-        "location": "Cafeteria",
+        "title": "Puzzle Krtko",
         "type": "normal"
     },
     {
         "id": 2,
         "title": "Prenesenie vody",
-        "location": "Electrical",
         "type": "normal"
     },
     {
         "id": 3,
         "title": "Triedenie hrachu",
-        "location": "Electrical",
         "type": "normal"
     },
     {
         "id": 4,
-        "title": "Oprava kablov",
-        "location": "Electrical",
+        "title": "Hladanie v biblii",
         "type": "normal"
     },
     {
         "id": 5,
-        "title": "Oprava kablov",
-        "location": "Security",
+        "title": "Vyfarbovacia tajnicka",
         "type": "normal"
     },
     {
         "id": 6,
-        "title": "Oprava kablov",
-        "location": "Reactor",
+        "title": "Morseovka",
         "type": "normal"
     },
     {
         "id": 7,
-        "title": "kazenie kablov",
-        "location": "Medbay",
-        "type": "sabotage"
+        "title": "Kockove puzzle",
+        "type": "normal"
     },
     {
         "id": 8,
-        "title": "kazenie káblov",
-        "location": "Cafeteria",
-        "type": "sabotage"
+        "title": "Hladanie zvierat",
+        "type": "normal"
     },
     {
         "id": 9,
-        "title": "kazenie káblov",
-        "location": "Electrical",
-        "type": "sabotage"
+        "title": "Vajicka (kinder)",
+        "type": "normal"
     },
     {
         "id": 10,
-        "title": "kazenie káblov",
-        "location": "Security",
-        "type": "sabotage"
+        "title": "Tangram",
+        "type": "normal"
+    },
+    {
+        "id": 11,
+        "title": "Elektricka stavebnica",
+        "type": "normal"
+    },
+    {
+        "id": 12,
+        "title": "Pexeso",
+        "type": "normal"
     }
 ]

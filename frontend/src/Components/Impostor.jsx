@@ -4,12 +4,15 @@ import GlobalProgress from './GlobalProgress.jsx';
 import { useOutletContext } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useSession } from '../SessionProvider.jsx';
+import ReportModal from './ReportModal.jsx';
 
 export default function Impostor() {
   const { session } = useSession();
   const { globalProgress, tasks: backendTasks } = useOutletContext();
   const [myTasks, setMyTasks] = useState([]);
   const [progress, setProgress] = useState(0);
+  const [showReportModal, setShowReportModal] = useState(false); 
+  const [players, setPlayers] = useState(null);
 
   const [cooldown, setCooldown] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0); // in seconds
@@ -43,9 +46,32 @@ export default function Impostor() {
   };
 
   const handleReportKill = () => {
-    // Logic to handle reporting a kill
-    console.log('Report Kill button clicked');
-  }
+    fetch('api/players', {
+      method: 'GET',
+      credentials: 'include',
+    })
+      .then(res => res.json())
+      .then(data => {
+        console.log('Players fetched:', data);
+        setPlayers(data.players);
+        setShowReportModal(true);
+      })
+      .catch(err => console.error('Failed to fetch players:', err));
+  };
+
+  const handleReportSubmit = (reportedPlayerId) => {
+    console.log('Reporting player:', reportedPlayerId);
+    // Send to backend:
+    fetch('/api/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reporterId: session.player_id,
+        reportedPlayerId,
+      }),
+    });
+    setShowReportModal(false);
+  };
 
   const onSabotage = async () => {
     const res = await fetch("/api/sabotage", {
@@ -97,6 +123,15 @@ export default function Impostor() {
 
   return (
     <div className="min-h-screen bg-black text-white p-4 flex flex-col">
+
+      {showReportModal && (
+        <ReportModal
+          players={players}
+          onReport={handleReportSubmit}
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
+
       <GlobalProgress progress={globalProgress} />
       <h1 className="text-3xl font-bold text-center my-4">My Tasks</h1>
       {/* <p className="text-center mb-6">As an Impostor, you can sabotage tasks and eliminate crewmates.</p> */}

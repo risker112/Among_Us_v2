@@ -21,6 +21,7 @@ export default function VotePage() {
    // Initialize and handle socket messages
   useEffect(() => {
     const handleSocketMessage = (data) => {
+      console.log('Vote recieved', data);
       switch (data.type) {
         case 'vote_started':
           setTimeLeft(data.time_left);
@@ -41,9 +42,9 @@ export default function VotePage() {
           break;
         case 'results':
           setResult({
-            name: data.name,
-            character: data.character,
-            role: data.role
+            name: data.ejected.name,
+            character: data.ejected.character,
+            role: data.ejected.role
           });
           break;
         default:

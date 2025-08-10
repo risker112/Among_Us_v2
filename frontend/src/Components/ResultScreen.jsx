@@ -1,123 +1,83 @@
-import React, { useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function ResultScreen() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { result, impostors, crewmates } = location.state || {}; // zmenit
-  const [showConfetti, setShowConfetti] = React.useState(false);
-  const [windowSize, setWindowSize] = React.useState({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  });
+  const [winner, setWinner] = useState(null);
 
-  // Result messages
   const resultMessages = {
-    impostorsWin: {
+    Impostor: {
       title: 'IMPOSTORS WIN!',
       subtitle: 'The crew has been eliminated',
-      color: 'text-red-500',
-      bg: 'bg-red-900/20',
+      color: 'text-red-600',
+      bg: 'bg-gray-900',
+      border: 'border-red-600',
     },
-    crewmatesWin: {
-      title: 'CREWMATES SURVIVE!',
+    Crew: {
+      title: 'CREWMATES WIN!',
       subtitle: 'All impostors have been ejected',
-      color: 'text-green-500',
-      bg: 'bg-green-900/20',
+      color: 'text-green-600',
+      bg: 'bg-gray-900',
+      border: 'border-green-600',
     }
   };
 
   useEffect(() => {
-    if (!result) {
-      navigate('/game');
-      return;
-    }
+    fetch('/api/results')
+      .then(res => res.json())
+      .then(data => setWinner(data.winner))
+      .catch(err => console.error('Error fetching results:', err));
 
-    // Set up confetti for wins
-    if (result === 'crewmatesWin' || result === 'timeOut') {
-      setShowConfetti(true);
-    }
-
-    // Handle window resize
-    const handleResize = () => {
-      setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
-    window.addEventListener('resize', handleResize);
-
-    // Auto-navigate after delay
+    // Po 10 sekundách najskôr zmeníme stav hry na 'lobby', potom presmerujeme
     const timer = setTimeout(() => {
-      navigate('/lobby');
-    }, 10000); // 10 seconds
+      fetch('/api/gamestate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: 'lobby' }),
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to update game state');
+          return res.json();
+        })
+        .then(() => {
+          navigate('/lobby');
+        })
+        .catch(err => console.error('Error updating game state:', err));
+    }, 10000);
 
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [navigate, result]);
+    return () => clearTimeout(timer);
+  }, [navigate]);
 
-  if (!result) return null;
+  if (!winner) {
+    return (
+      <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <div className="inline-block animate-pulse">
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          </div>
+          <h1 className="text-white text-3xl font-bold">Loading results...</h1>
+        </div>
+      </div>
+    );
+  }
 
-  const currentResult = resultMessages[result] || resultMessages.impostorsWin;
+  console.log(winner)
+  const { title, subtitle, color, bg, border } = resultMessages[winner];
+  console.log(resultMessages[winner])
 
   return (
-    <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center p-4 z-50">
-      {showConfetti && (
-        <Confetti
-          width={windowSize.width}
-          height={windowSize.height}
-          recycle={false}
-          numberOfPieces={500}
-        />
-      )}
-
-      <div className={`text-center max-w-2xl p-8 rounded-xl ${currentResult.bg} backdrop-blur-sm`}>
-        {/* Main result title */}
-        <h1 className={`text-5xl md:text-6xl font-bold mb-4 ${currentResult.color}`}>
-          {currentResult.title}
-        </h1>
-        
-        {/* Subtitle */}
-        <h2 className="text-2xl text-gray-300 mb-8">
-          {currentResult.subtitle}
-        </h2>
-
-        {/* Player lists */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-          {/* Impostors list */}
-          <div className="text-left">
-            <h3 className="text-xl font-bold text-red-500 mb-4">Impostors:</h3>
-            <ul className="space-y-2">
-              {impostors?.map(player => (
-                <li key={player.id} className="flex items-center gap-3">
-                  <img
-                    src={`src/assets/characters/${player.character}`}
-                    alt=""
-                    className="w-10 h-10 rounded-full border border-red-500"
-                  />
-                  <span className="text-lg">{player.name}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Crewmates list */}
-          <div className="text-left">
-            <h3 className="text-xl font-bold text-green-500 mb-4">Crewmates:</h3>
-            <ul className="space-y-2">
-              {crewmates?.map(player => (
-                <li key={player.id} className="flex items-center gap-3">
-                  <img
-                    src={`src/assets/characters/${player.character}`}
-                    alt=""
-                    className="w-10 h-10 rounded-full border border-green-500"
-                  />
-                  <span className="text-lg">{player.name}</span>
-                </li>
-              ))}
-            </ul>
+    <div className={`fixed inset-0 ${bg} flex items-center justify-center p-4`}>
+      <div className="max-w-4xl w-full mx-4">
+        <div className={`text-center p-8 md:p-12 rounded-xl border-4 ${border} bg-gray-800/90 backdrop-blur-sm`}>
+          <h1 className={`text-4xl sm:text-5xl md:text-6xl font-extrabold mb-6 ${color}`}>
+            {title}
+          </h1>
+          <h2 className="text-xl sm:text-2xl md:text-3xl text-gray-300 mb-8">
+            {subtitle}
+          </h2>
+          
+          <div className="mt-12 text-gray-400 text-sm md:text-base">
+            <p>Returning to lobby in 10 seconds...</p>
           </div>
         </div>
       </div>
