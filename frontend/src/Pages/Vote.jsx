@@ -16,6 +16,7 @@ export default function VotePage() {
   const { socket, addMessageListener } = useSocket();
   const [result, setResult] = useState(false);
   const [gameEnd, setGameEnd] = useState(false);
+  const [resultRecieved, setResultRecieved] = useState(false);
 
   // Initialize WebSocket connection
    // Initialize and handle socket messages
@@ -41,11 +42,16 @@ export default function VotePage() {
           // navigate(data.path);
           break;
         case 'results':
-          setResult({
-            name: data.ejected.name,
-            character: data.ejected.character,
-            role: data.ejected.role
-          });
+          if (data.ejected) {
+            setResult({
+              name: data.ejected.name,
+              character: data.ejected.character,
+              role: data.ejected.role
+            });
+          } else {
+            setResult(null);
+          }
+          setResultRecieved(true);
           break;
         default:
           break;
@@ -80,6 +86,9 @@ export default function VotePage() {
         setTimeLeft(data.time_left);
         setVotes(data.votes || {});
         setVotingComplete(data.game_state !== 'vote');
+        if (data.game_state !== 'vote') {
+          navigate('/game');
+        }
       } catch (error) {
         console.error('Failed to fetch vote state:', error);
       }
@@ -139,7 +148,7 @@ export default function VotePage() {
     }
   };
 
-  if (result) return (<EjectionScreen result={result}></EjectionScreen>);
+  if (resultRecieved) return (<EjectionScreen result={result}></EjectionScreen>);
   if (gameEnd) return (<ResultScreen></ResultScreen>);
 
   return (
@@ -171,16 +180,15 @@ export default function VotePage() {
               />
             </div>
 
-            <p className="font-medium text-lg">{player?.name} {player?.id === session?.player_id && '(You)'}</p>
+            <p className="font-medium text-lg">
+              {player?.name} {player?.id === session?.player_id && '(You)'}
+            </p>
 
-            {/* Show vote indicators */}
-            {Object.entries(votes).map(([voterId, targetId]) => (
-              targetId === player.id && (
-                <span key={voterId} className="ml-auto text-sm bg-gray-700 px-2 py-1 rounded">
-                  Voted
-                </span>
-              )
-            ))}
+            {Object.values(votes).filter(v => v === player.id).length > 0 && (
+              <span className="ml-auto text-sm bg-gray-700 px-2 py-1 rounded">
+                  {Object.values(votes).filter(v => v === player.id).length} vote{Object.values(votes).filter(v => v === player.id).length !== 1 && 's'}
+              </span>
+            )}
           </button>
         ))}
       </div>

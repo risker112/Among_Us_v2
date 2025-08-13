@@ -39,8 +39,8 @@ ghost_players = []
 sabotage_timers = {}
 game_state = "welcome"
 vote_start_time = None
-MAX_PLAYERS = 13
-TOTAL_TASKS = 12
+MAX_PLAYERS = 20
+TOTAL_TASKS = len(ALL_TASKS)
 SABOTAGE_DURATION = 60
 VOTE_DURATION = 120
 
@@ -93,6 +93,7 @@ async def join_game(request: Request):
     await broadcast_player_list()
 
     return {"playerId": player_id, "playerName": name}
+
 @app.get("/api/players")
 async def get_players():
     await broadcast_player_list()
@@ -213,7 +214,10 @@ async def get_session(request: Request):
     }
 
 def calc_num_impostors(num_players):
-    return 1
+    if num_players < 8:
+        return 1
+    else:
+        return 2
 
 def assign_player_tasks(player_id: str):
     global ALL_TASKS, players_tasks
@@ -681,7 +685,7 @@ async def update_vote_time():
 async def end_voting():
     global game_state, alive_players
 
-    if len(alive_players) == 3:
+    if len(alive_players) <= (2+calc_num_impostors(len(connected_players))):
         game_state = "after_game"
     else:
         game_state = "game"
@@ -699,7 +703,8 @@ async def submit_report(request: Request):
     alive_players.remove(reported_id)
     game_state = "vote"
 
-    if len(alive_players) <= 3 or (connected_players[reported_id]["session"]['role'] == "Impostor"):
+
+    if len(alive_players) <= (2+calc_num_impostors(len(connected_players))):
         await send_results()
         return
         # await end_game()
@@ -758,17 +763,22 @@ async def submit_vote(request: Request):
 
 async def calculate_result():
     global alive_players, ghost_players, connected_players
+    
     results = process_votes(votes, alive_players)
     
-    print("happening --------------------ggkgnaaaajdnjdjdjankjdnjasdndjkgnsangjdsna:DDDDDD<333444")
     # Handle case where someone was ejected
     if results:
         alive_players.remove(results)
         ghost_players.append(results)
         connected_players[results]["session"]["is_ghost"] = True
 
+        print(len(alive_players))
+        print(2+calc_num_impostors(len(connected_players)))
+        print("imp count:", len(get_impostors_ids()))
+
         # Check if game should end
-        if len(alive_players) <= 3 or (connected_players[results]['session']['role'] == "Impostor"):
+        if len(alive_players) <= (2+calc_num_impostors(len(connected_players))) or (connected_players[results]["session"]['role'] == "Impostor" and len(get_impostors_ids()) == 0):
+            print("som tuna :(")
             await send_results()
             return 
         
@@ -801,18 +811,23 @@ async def calculate_result():
     
     await end_voting()
 
+def get_impostors_ids():
+    global connected_players
+    # Find all impostor IDs
+    impostor_ids = [
+        pid for pid, pdata in connected_players.items()
+        if pdata["session"]["role"] == "Impostor" and pdata["session"]["is_ghost"] == False
+    ]
+    return impostor_ids
+
 @app.get("/api/results")
 async def get_results():
     global connected_players, alive_players, game_state
 
     pg = await get_global_progress()
 
-    # Find all impostor IDs
-    impostor_ids = [
-        pid for pid, pdata in connected_players.items()
-        if pdata["session"]["role"] == "impostor"
-    ]
-    print("pg", pg)
+    impostor_ids = get_impostors_ids()
+
     if pg == 100:
         winner = "Crew"
     else:
@@ -830,12 +845,8 @@ async def send_results():
 
     pg = await get_global_progress()
 
-    # Find all impostor IDs
-    impostor_ids = [
-        pid for pid, pdata in connected_players.items()
-        if pdata["session"]["role"] == "impostor"
-    ]
-    print("pg", pg)
+    impostor_ids = get_impostors_ids()
+
     if pg == 100:
         winner = "Crew"
     else:
