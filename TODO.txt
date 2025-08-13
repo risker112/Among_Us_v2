@@ -1,1 +1,3 @@
-ked dojde cas pri vote  -- tylko toto
+2 impsotors
+vote bug sem tam 
+reset lobby btn

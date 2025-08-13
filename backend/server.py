@@ -550,6 +550,13 @@ async def leave_lobby(request: Request):
     request.session.clear()
     return {"message": "Left lobby"}
 
+@app.post("/api/reset-lobby")
+async def reset_lobby():
+    global connected_players, game_state
+    game_state = "welcome"
+    connected_players = Dict[str:Dict] = {}
+    return {"message": 'Lobby reseted'}
+
 @app.get("/api/game/end")
 async def end_game():
     global player_roles, players_tasks, sabotage_timers, game_state

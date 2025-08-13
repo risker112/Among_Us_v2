@@ -89,6 +89,18 @@ export default function Lobby() {
     }
   };
 
+  const handleResetLobby = async () => {
+    try {
+      await fetch('/api/reset-lobby', {
+        method: "POST",
+        credentials: "include",
+      });
+      navigate('/welcome')
+    } catch {
+      setError("Failed to reset lobby")
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
@@ -107,6 +119,14 @@ export default function Lobby() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
+
+      <button
+          onClick={handleResetLobby}
+          className="bg-red-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded transition"
+        >
+          Reset Lobby
+      </button>
+
       <img src="/src/assets/logo.png" alt="Game Logo" className="w-64 sm:w-80 h-auto mb-6" />
       <h2 className="text-2xl font-bold mb-6">Lobby ({players.length}/13)</h2>
 
