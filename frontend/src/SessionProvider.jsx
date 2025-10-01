@@ -92,13 +92,21 @@ export const SessionProvider = ({ children }) => {
 
   // Initial load and periodic refresh
   useEffect(() => {
-    fetchSession();
-    
-    // Refresh session every 30 seconds to keep it alive
-    const interval = setInterval(fetchSession, 30000);
-    
-    return () => clearInterval(interval);
+    let timeoutId;
+
+    const fetchWithRandomInterval = async () => {
+      await fetchSession();
+
+      // Random interval between 30 and 45 seconds (ms)
+      const interval = 30000 + Math.random() * 30000;
+      timeoutId = setTimeout(fetchWithRandomInterval, interval);
+    };
+
+    fetchWithRandomInterval();
+
+    return () => clearTimeout(timeoutId);
   }, [navigate]);
+
 
   return (
     <SessionContext.Provider value={{ 
@@ -106,7 +114,7 @@ export const SessionProvider = ({ children }) => {
       loading, 
       error, 
       refreshSession,
-      fetchSession, // Expose raw fetch for specific cases
+      fetchSession,
       updateSession
     }}>
       {children}

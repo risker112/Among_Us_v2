@@ -7,13 +7,13 @@ import ReportModal from './ReportModal.jsx';
 
 export default function Tasks() {
   const { session } = useSession();
-  const { globalProgress, tasks: backendTasks } = useOutletContext();
+  const { globalProgress, tasks: backendTasks, sabotageActive } = useOutletContext();
   const [myTasks, setMyTasks] = useState([]);
   const [showReportModal, setShowReportModal] = useState(false);
   const [players, setPlayers] = useState([]); // Fetch this from your backend
   const [progress, setProgress] = useState(0);
-  const [sabotageActive, setSabotageActive] = useState(false);
   const [sabotageRemaining, setSabotageRemaining] = useState(0);
+
 
   // Load my tasks from backendTasks
   useEffect(() => {
@@ -26,23 +26,6 @@ export default function Tasks() {
       done: task.done || false,
     })));
   }, [backendTasks]);
-
-  useEffect(() => {
-    const checkSabotage = async () => {
-      try {
-        const res = await fetch('/api/sabotage/status');
-        const data = await res.json();
-        setSabotageActive(data.active);
-        setSabotageRemaining(Math.ceil(data.remaining));
-      } catch (err) {
-        console.error('Failed to check sabotage:', err);
-      }
-    };
-    
-    checkSabotage();
-    const interval = setInterval(checkSabotage, 2500);
-    return () => clearInterval(interval);
-  }, []);
 
   // Calculate progress
   useEffect(() => {

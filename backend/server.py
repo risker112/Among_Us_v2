@@ -37,11 +37,14 @@ votes = {}
 players_tasks = {}
 ghost_players = []
 sabotage_timers = {}
+impostor_cooldowns = {}
+active_sabotage = {"active": False, "start_time": None}
 game_state = "welcome"
 vote_start_time = None
 MAX_PLAYERS = 20
 TOTAL_TASKS = len(ALL_TASKS)
 SABOTAGE_DURATION = 60
+SABOTAGE_COOLDOWN = 300
 VOTE_DURATION = 120
 
 class ConnectionManager:
@@ -449,15 +452,48 @@ async def start_sabotage(request: Request):
         return JSONResponse(status_code=403, content={"error": "Unauthorized"})
     
     # Only impostors can start sabotage
-    if player_roles.get(player_id)['role'] != "Impostor":
+    if player_roles.get(player_id, {}).get('role') != "Impostor":
         return JSONResponse(status_code=403, content={"error": "Only impostors can sabotage"})
 
-    # Set timer for all players
     current_time = time.time()
+
+    # Check if a sabotage is active for *anyone* (shared sabotage state)
+    active_sabotage = None
+    if sabotage_timers:
+        # Get the earliest start time of an active sabotage
+        earliest_start = min(sabotage_timers.values())
+        elapsed = current_time - earliest_start
+        if elapsed < SABOTAGE_DURATION:
+            # Sabotage still running
+            remaining = max(0, SABOTAGE_DURATION - elapsed)
+            cooldown_remaining = max(0, SABOTAGE_COOLDOWN - elapsed)
+            return {
+                "active": True,
+                "remaining": remaining,
+                "endsAt": earliest_start + SABOTAGE_DURATION,
+                "cooldown": cooldown_remaining
+            }
+
+    # Otherwise, start new sabotage
     for pid in player_roles.keys():
         sabotage_timers[pid] = current_time
-    
-    return {"message": "Sabotage started", "duration": SABOTAGE_DURATION}
+
+    for pid, player in connected_players.items():
+       if player.get("ws"):
+            try:
+                await player["ws"].send_json({
+                    "type": "sabotage_active",
+                })
+            except Exception as e:
+                print(f"Error sending redirect to {pid}: {e}")
+
+    return {
+        "message": "Sabotage started",
+        "duration": SABOTAGE_DURATION,
+        "cooldown": SABOTAGE_COOLDOWN,
+        "active": True,
+        "endsAt": current_time + SABOTAGE_DURATION
+    }
 
 @app.get("/api/sabotage")
 async def get_sabotage(request: Request):
@@ -475,26 +511,8 @@ async def get_sabotage(request: Request):
     return {
         "active": remaining > 0,
         "remaining": remaining,
-        "endsAt": start_time + SABOTAGE_DURATION
-    }
-
-@app.get("/api/sabotage/status")
-async def get_sabotage_status(request: Request):
-    player_id = request.session.get("player_id")
-    if not player_id:
-        return JSONResponse(status_code=403, content={"error": "Unauthorized"})
-
-    start_time = sabotage_timers.get(player_id)
-    if not start_time:
-        return {"active": False, "remaining": 0}
-    
-    elapsed = time.time() - start_time
-    remaining = max(0, SABOTAGE_DURATION - elapsed)
-    
-    return {
-        "active": remaining > 0,
-        "remaining": remaining,
-        "endsAt": start_time + SABOTAGE_DURATION
+        "endsAt": start_time + SABOTAGE_DURATION,
+        "cooldown": SABOTAGE_COOLDOWN - elapsed   
     }
 
 # ───────────────────────────────────────────────────────────── session management
@@ -558,7 +576,7 @@ async def leave_lobby(request: Request):
 async def reset_lobby():
     global connected_players, game_state
     game_state = "welcome"
-    connected_players = Dict[str:Dict] = {}
+    connected_players = {}
     return {"message": 'Lobby reseted'}
 
 @app.get("/api/game/end")
@@ -927,6 +945,6 @@ if __name__ == "__main__":
         port=8000,
         ws_ping_interval=20,
         ws_ping_timeout=20,
-        reload=True,
-        log_level="info"
+        log_level="info",
+        workers=6
     )

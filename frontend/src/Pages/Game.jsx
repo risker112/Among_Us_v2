@@ -20,6 +20,7 @@ function Game() {
     name: ''
   });
   const [report, setReport] = useState(false);
+  const [sabotageActive, setSabotageActive] = useState(false);
 
   useEffect(() => {
     if (session?.role && session?.character) {
@@ -40,6 +41,21 @@ function Game() {
       }
     }
     fetchTasks();
+  }, []);
+
+  
+  useEffect(() => {
+    const checkSabotage = async () => {
+      try {
+          const res = await fetch("/api/sabotage", { credentials: 'include' });
+          const data = await res.json();
+        setSabotageActive(data.active);
+      } catch (err) {
+        console.error('Failed to check sabotage:', err);
+      }
+    };
+    
+    checkSabotage();
   }, []);
 
   useEffect(() => {
@@ -75,8 +91,9 @@ function Game() {
         });
       } else if (msg.type === 'game_end') {
         navigate('/game/aftergame')
-      }
-
+      } else if (msg.type === 'sabotage_active') {
+          setSabotageActive(true);
+        } 
     });
 
     return () => removeListener();
@@ -87,7 +104,7 @@ function Game() {
       {report ? (
         <ReportedBody character={reportedPlayer.character} name={reportedPlayer.name} />
       ) : (
-        <Outlet context={{ role, character, globalProgress, vote, emergency, tasks }} />
+        <Outlet context={{ role, character, globalProgress, vote, emergency, tasks, sabotageActive }} />
       )}
     </div>
   );

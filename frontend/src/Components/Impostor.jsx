@@ -80,18 +80,18 @@ export default function Impostor() {
     });
     const data = await res.json();
     setCooldown(true);
-    setTimeLeft(300); // local timer starts fresh
+    setTimeLeft(data.cooldown); // local timer starts fresh
   };
 
     useEffect(() => {
     const fetchCooldown = async () => {
       const res = await fetch("/api/sabotage", { credentials: 'include' });
       const data = await res.json();
-      if (data.remaining) {
-        const remaining = Math.floor(data.remaining);
-        if (remaining > 0) {
+      if (data.cooldown) {
+        const cooldown = Math.floor(data.cooldown);
+        if (cooldown > 0) {
           setCooldown(true);
-          setTimeLeft(remaining);
+          setTimeLeft(cooldown);
         }
       }
     };
